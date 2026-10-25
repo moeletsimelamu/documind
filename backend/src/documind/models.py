@@ -77,6 +77,8 @@ class Document(Base):
     failure_code: Mapped[str | None] = mapped_column(String(64))
     failure_message: Mapped[str | None] = mapped_column(String(500))
     page_count: Mapped[int | None] = mapped_column(Integer)
+    # PDF pages that yielded no text (images, blank pages, unreadable pages).
+    empty_page_count: Mapped[int | None] = mapped_column(Integer)
     chunk_count: Mapped[int] = mapped_column(Integer, default=0)
     char_count: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utc_now)

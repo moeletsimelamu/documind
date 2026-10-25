@@ -1,9 +1,9 @@
 # DocuMind — Architecture
 
-Status: **Phase 2 complete** — backend foundation (configuration, logging, error envelope,
-middleware, database schema with the FTS5 index, health/readiness/config endpoints) is built and
-tested. Everything else here is the design for later phases and is marked *(planned)* where it
-matters.
+Status: **Phase 3 complete** — the backend foundation and the document-ingestion pipeline
+(upload, validation, storage, isolated extraction, chunking, indexing, listing, download, deletion,
+restart recovery) are built and tested. Search, question answering and the frontend are the design
+for later phases and are marked *(planned)* where it matters.
 
 ## 1. Scope and trust model
 
@@ -28,7 +28,7 @@ matters.
    ├─ ingestion/      validate → store → extract → normalise → chunk → index
    ├─ retrieval.py    SQLite FTS5 (BM25) search, excerpts, highlight offsets
    ├─ answering/      provider interface, prompt construction, citation validation
-   ├─ storage.py      file storage interface + local-disk implementation
+   ├─ storage.py      local-disk file storage (the only code that builds file paths)
    ├─ db.py/models.py SQLAlchemy 2.x, SQLite (WAL), schema initialisation
    └─ config.py       pydantic-settings, environment variables
         │                        │
@@ -57,19 +57,20 @@ Windows** with `pip install --dry-run --only-binary=:all:` before being chosen.
 | Multipart parsing | python-multipart | 0.0.32 | Required by FastAPI for uploads. |
 | Persistence | SQLAlchemy + SQLite | 2.1.6, SQLite 3.50.4 | Parameterised queries; FTS5 confirmed available in the local build. |
 | PDF text | pypdf | 6.21.2 | Pure Python, BSD licence, per-page extraction. PyMuPDF was rejected: AGPL licence and a large native dependency. |
+| PDF decryption | cryptography | 50.0.2 | Lets pypdf open AES-encrypted PDFs, including the common kind "protected" with an empty password (permissions only). |
 | LLM client | httpx2 (direct HTTP) | 2.16.0 | Calls any OpenAI-compatible `/chat/completions` endpoint. No vendor SDK: one small, testable client works for hosted and local servers. httpx2 is the maintained successor of httpx (same author, Pydantic organisation); Starlette 1.10's test client deprecates httpx in its favour. |
 | Tests | pytest | 9.1.1 | FastAPI `TestClient` (uses httpx2), temp dirs, isolated DBs. Warnings are errors. |
 | Lint / types | ruff, mypy | 0.17.2, 2.4.0 | Run in CI. |
 | Frontend | Angular (LTS line) | 21.2.x | Angular 22 requires Node ≥ 22.22.3; the installed Node 22.14.0 satisfies Angular 21 (`^22.12.0`). The global CLI is also 21.2. |
 
 FastAPI 0.162 brings Starlette 1.10. Direct backend dependencies are pinned exactly in
-`backend/pyproject.toml`; every resolved package (35, including transitive ones) is pinned in
+`backend/pyproject.toml`; every resolved package (38, including transitive ones) is pinned in
 `backend/constraints.txt`, installed with `pip install -c constraints.txt -e ".[dev]"`.
 `requires-python` is `>=3.12`; so far it is tested only on 3.14 — CI adds 3.12 in Phase 8.
 
 ## 4. Repository layout
 
-Files marked † exist after Phase 2; the rest are planned.
+Files marked † exist; the rest are planned.
 
 ```
 DocuMind/
@@ -84,12 +85,12 @@ DocuMind/
 │  │  ├─ db.py †            engine, PRAGMAs, schema init incl. FTS5 + triggers
 │  │  ├─ models.py †        Document, Chunk ORM models, schema_meta
 │  │  ├─ schemas.py †       Pydantic API models
-│  │  ├─ storage.py         FileStorage protocol, LocalFileStorage
-│  │  ├─ api/               deps.py †, health.py †, documents.py, search.py, ask.py
-│  │  ├─ ingestion/         validation.py, extraction.py, chunking.py, pipeline.py
+│  │  ├─ storage.py †       LocalFileStorage: generated names, containment check, orphan sweep
+│  │  ├─ api/               deps.py †, health.py †, documents.py †, search.py, ask.py
+│  │  ├─ ingestion/ †       validation.py, extraction.py, isolation.py, chunking.py, pipeline.py
 │  │  ├─ retrieval.py       query sanitising, FTS5 search, excerpts
 │  │  └─ answering/         provider.py, openai_compatible.py, prompt.py, service.py
-│  └─ tests/                unit + API tests, fixtures/ (generated test PDFs/TXTs), eval/
+│  └─ tests/ †              unit + API tests; pdf_factory.py generates test PDFs; eval/ planned
 ├─ frontend/                Angular 21 workspace
 ├─ docs/                    ARCHITECTURE, DESIGN, PLAN, REVIEW, DEPLOYMENT, phase-reports/
 ├─ .github/workflows/ci.yml
@@ -111,6 +112,7 @@ documents
   failure_code    TEXT NULL  e.g. 'no_extractable_text', 'encrypted', 'malformed', 'too_large'
   failure_message TEXT NULL  user-facing explanation
   page_count      INTEGER NULL
+  empty_page_count INTEGER NULL  PDF pages that yielded no text (shown as a warning)
   chunk_count     INTEGER    default 0
   char_count      INTEGER    default 0
   created_at, processed_at  TIMESTAMP (UTC)
@@ -125,15 +127,15 @@ chunks
 
 chunks_fts  — FTS5 external-content table over chunks.text
   tokenize = 'porter unicode61 remove_diacritics 2'
-  kept in sync by AFTER INSERT / AFTER DELETE triggers on chunks
+  kept in sync by AFTER INSERT / AFTER UPDATE / AFTER DELETE triggers on chunks
 ```
 
 - `PRAGMA foreign_keys=ON`, `journal_mode=WAL`, `synchronous=NORMAL` and `busy_timeout=5000` are
   set on every connection.
 - `status` has a database CHECK constraint; `(document_id, ordinal)` is unique; timestamps are
   stored as UTC and read back timezone-aware.
-- Deleting a document cascades to `chunks`; the delete trigger removes the FTS rows. Tests will
-  assert that no `chunks` or FTS rows survive a delete.
+- Deleting a document cascades to `chunks`; the delete trigger removes the FTS rows. Tests assert
+  that no chunks or index entries survive a delete and run FTS5's `integrity-check`.
 - Chunks for a document are written in **one transaction** together with the status change to
   `ready`, so a document is never `ready` with a partial index.
 - **Schema initialisation:** `create_all` plus idempotent raw DDL for the FTS table and triggers,
@@ -143,46 +145,72 @@ chunks_fts  — FTS5 external-content table over chunks.text
 
 ## 6. Document-processing pipeline
 
-1. **Accept** (`POST /api/documents`, one file per request). The body is streamed to a temporary
-   file in the storage directory in 64 KiB blocks; the upload is aborted with `413` as soon as it
-   exceeds `MAX_UPLOAD_BYTES`. `Content-Length` is checked first but not trusted.
-2. **Validate**
-   - Extension allow-list: `.pdf`, `.txt` (case-insensitive).
-   - Content check: PDFs must start with `%PDF-` within the first 1 KiB; TXT must decode as UTF-8
-     (BOM optional) or UTF-16 with BOM and must not contain NUL bytes. Mismatches are rejected with
-     `415` and a specific message (for example "File has a .pdf extension but is not a PDF").
-   - SHA-256 duplicate check (see §8).
-3. **Store** as `<uuid>.<ext>`; the path is resolved and checked to be inside the storage root.
-   The display name is sanitised (path components stripped, control characters removed, Unicode
-   NFC, length ≤ 200) and is never used to build a path.
-4. **Record** the document as `processing` and return `202` with the document.
-5. **Extract** in a background task (FastAPI `BackgroundTasks`, at most
-   `MAX_CONCURRENT_PROCESSING` = 2 at once via a semaphore):
-   - PDF: pypdf, page by page. Encrypted PDFs that do not open with an empty password fail with
-     `encrypted`. More than `MAX_PDF_PAGES` (500) fails with `too_large`.
-   - **Scanned PDFs:** if the document yields fewer than `MIN_CHARS_PER_PAGE` average non-whitespace
-     characters (and in any case if it yields none), it fails with `no_extractable_text`: "This PDF
-     appears to contain scanned images. DocuMind cannot read text from images (no OCR)."
-   - Text longer than `MAX_EXTRACTED_CHARS` (2,000,000) fails with `too_large`; nothing is truncated
-     silently.
-   - Any parser exception is caught, logged (without document content) and recorded as `malformed`.
-6. **Normalise:** remove NULs and control characters, Unicode NFC, join words hyphenated across a
-   line break, collapse runs of spaces, keep paragraph breaks.
-7. **Chunk:** paragraphs are packed into chunks of about `CHUNK_TARGET_CHARS` (1,000; hard maximum
-   1,600). Paragraphs longer than the maximum are split on sentence, then word boundaries. PDF
-   chunks never cross a page boundary, so every chunk has exactly one page number. TXT chunks
-   record their line range. No overlap initially; revisited in Phase 4 if the evaluation shows
-   misses at chunk boundaries. A test asserts that the concatenated chunks contain every
-   non-whitespace character of the normalised text (nothing is dropped).
-8. **Index** chunks and set `ready` in one transaction. If the document was deleted while it was
-   being processed, the pipeline discards its work instead of failing.
-9. **Recovery:** on start-up, documents still in `processing` (the server stopped mid-job) are
-   marked `failed` with `interrupted` and the message "Processing was interrupted. Delete and
-   upload the file again."
+**In the upload request** (`POST /api/documents`, one file per request, `pipeline.accept_upload`):
 
-**Known risk — parser hangs.** A crafted PDF could make pypdf slow. Page and size limits bound most
-cases, and pypdf is kept current. Whether to run extraction in a separate process with a hard
-wall-clock timeout is decided in Phase 3 after measuring; the decision is recorded here either way.
+1. **Size limit while receiving.** `UploadSizeLimitMiddleware` rejects a body whose
+   `Content-Length` exceeds the limit (plus 64 KiB for multipart framing) before reading it, and
+   counts bytes as they arrive when the header is missing or wrong, so an oversized upload is
+   stopped before the multipart parser finishes. The exact per-file limit (`MAX_UPLOAD_MB`, 20) is
+   checked again while copying.
+2. **Name and type.** The display name is sanitised (directories stripped, control and invisible
+   formatting characters such as the right-to-left override removed, NFC, ≤ 200 characters with
+   the extension kept). The extension must be `.pdf` or `.txt`; anything else is `415`.
+3. **Copy, hash and check content.** The file is copied in 64 KiB blocks to a temporary file in the
+   storage directory while its SHA-256 is computed. Empty files are `422 empty_file`. PDFs must
+   contain `%PDF-` within the first 1 KiB; text files must decode as UTF-8 (BOM optional) or UTF-16
+   with a BOM and contain no NUL bytes. Mismatches are `415` with a specific message ("This file has
+   a .pdf extension but is not a PDF").
+4. **Duplicate check** on the hash (§8), also enforced by a unique index for simultaneous uploads.
+5. **Store and record.** The temporary file is renamed to `<uuid>.<ext>`; the document is
+   committed as `processing` and returned with `202`. Processing is queued as a background task.
+
+**In the background** (`DocumentProcessor.process`; at most `MAX_CONCURRENT_PROCESSING` = 2 at once):
+
+6. **Extract in an isolated process** (`isolation.run_isolated`, `spawn` start method) with a hard
+   time limit (`EXTRACTION_TIMEOUT_SECONDS`, 120). The worker receives the stored file's *path*,
+   not its contents — passing megabytes through process start-up could block forever if the worker
+   died early, which was observed in testing. The parent waits on both the result pipe and the
+   process's exit sentinel, so a worker that dies is reported at once rather than at the timeout.
+   - PDF (pypdf, page by page): an encrypted PDF that does not open with an empty password fails
+     with `encrypted`; more than `MAX_PDF_PAGES` (500) fails with `too_large`; an unparseable file,
+     or one whose every page fails, is `malformed`. A single page that fails is treated as a page
+     without text.
+   - **Scanned PDFs:** fewer than 25 non-whitespace characters per page on average fails with
+     `no_extractable_text` ("This PDF appears to contain scanned images rather than text… OCR is not
+     supported"). Otherwise pages with no text are counted in `empty_page_count` and shown.
+   - More than `MAX_EXTRACTED_CHARS` (2,000,000) fails with `too_large`; nothing is truncated.
+   - Timeout → `timeout`; worker crash → `processing_error`; missing file → `file_missing`.
+7. **Normalise** (in the worker): Unicode NFKC (ligatures such as "ﬁ" become "fi"), line endings to
+   `\n`, other control characters to spaces, soft hyphens removed, runs of spaces collapsed. For
+   PDFs only, a lowercase word split across a line break with a hyphen is rejoined
+   ("inter-\nnational"). Text files keep their line structure so line numbers stay correct.
+8. **Chunk** (`chunk_lines`): lines are grouped into paragraphs (separated by blank lines). A
+   paragraph that does not fit in the current chunk (target 1,000 characters) starts a new chunk,
+   unless the current chunk is still under half the target (e.g. just a heading). Inside a long
+   paragraph a chunk ends at the first line boundary past the target; a single line longer than the
+   target is split at sentence ends, then spaces, then anywhere. No chunk exceeds 1,600
+   characters. PDF chunks never cross a page and join visual line breaks with spaces; text-file
+   chunks keep newlines and record their line range. No overlap; revisited in Phase 4 if the
+   evaluation shows misses at chunk boundaries. A randomised test checks over 25 generated
+   documents that chunks contain every non-whitespace character in order, stay within size, and
+   point at the lines they claim.
+9. **Index and mark ready** in one transaction. If the document was deleted meanwhile, the work is
+   discarded (checked before writing, and again if the write fails on the foreign key).
+10. **Unexpected errors** are logged with the document ID and recorded as `processing_error`, so a
+    document never stays `processing` because of a bug.
+
+**On start-up** (`recover_after_restart`): documents still `processing` were interrupted by a
+shutdown and are marked `failed` / `interrupted`; files in the storage directory that no document
+refers to (including abandoned temporary uploads) are deleted. Only files matching DocuMind's own
+naming patterns are touched.
+
+**Measured on the development machine** (Windows 11, CPython 3.14.3), with text-dense generated
+PDFs: 50 pages extract in 0.7 s in-process and 3.1 s isolated; 500 pages (1.6 million characters,
+the size limits' worst case) in 7.2 s in-process and 10.0 s isolated, 11.7 s end to end through the
+API including 2,000 chunks indexed. Starting the worker process costs about 2.4 s on Windows. The
+120 s timeout therefore leaves a wide margin for legitimate documents while bounding hostile ones.
+A memory limit for the worker is not enforced (there is no portable way on Windows); this is
+recorded for the Phase 9 review.
 
 ## 7. Retrieval
 
@@ -280,10 +308,10 @@ logged.
 | GET | `/api/ready` | DB reachable, FTS5 present, storage writable | 200 / 503 |
 | GET | `/api/config` | Public client config: limits, allowed types, `llm_enabled` (never secrets or the provider URL) | 200 |
 | GET | `/api/docs`, `/api/openapi.json` | Swagger UI and schema; disable with `DOCUMIND_API_DOCS=false` | 200 |
-| GET | `/api/documents?q=&status=` | List / filter library by name and status | 200 |
+| GET | `/api/documents?q=&status=` | List / filter library by name (case-insensitive, wildcards literal) and status | 200, 422 |
 | POST | `/api/documents` | Upload one file (multipart field `file`) | 202, 409, 413, 415, 422 |
 | GET | `/api/documents/{id}` | Document detail and status | 200, 404 |
-| GET | `/api/documents/{id}/chunks?offset=&limit=` | Extracted text, in chunks, for the reader | 200, 404 |
+| GET | `/api/documents/{id}/chunks?offset=&limit=` | Extracted text, in chunks, for the reader (limit ≤ 200) | 200, 404, 422 |
 | GET | `/api/documents/{id}/file` | Download original (`Content-Disposition: attachment`, `nosniff`) | 200, 404 |
 | DELETE | `/api/documents/{id}` | Delete record, chunks, index rows and stored file | 204, 404 |
 | GET | `/api/search?q=&document_id=&limit=` | Keyword search over indexed chunks | 200, 422 |
@@ -305,6 +333,7 @@ Environment variables (prefix `DOCUMIND_`), all with safe defaults; `.env.exampl
 | `DOCUMIND_LLM_API_KEY` | *(unset)* | Optional (local servers often need none). Read only on the server; never logged or returned |
 | `DOCUMIND_LLM_TIMEOUT_SECONDS` | `30` | |
 | `DOCUMIND_MAX_CONCURRENT_PROCESSING` | `2` | Documents processed at once |
+| `DOCUMIND_EXTRACTION_TIMEOUT_SECONDS` | `120` | Hard limit for reading one file |
 | `DOCUMIND_MAX_QUERY_CHARS` / `DOCUMIND_MAX_QUESTION_CHARS` | `300` / `1000` | |
 | `DOCUMIND_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `DOCUMIND_API_DOCS` | `true` | Serve Swagger UI at `/api/docs` |
@@ -313,9 +342,12 @@ Environment variables (prefix `DOCUMIND_`), all with safe defaults; `.env.exampl
 
 Verified in Phase 9 and reported in `docs/REVIEW.md`.
 
-- Server-side extension + magic-byte validation; streamed size limit; page/character limits;
-  bounded processing concurrency; query/question length limits.
-- Generated storage names, path containment check, storage outside the static web root.
+- Server-side extension + content validation; size limit enforced while the body is received and
+  again while copying; page and character limits; extraction in a separate process with a hard
+  timeout; bounded processing concurrency; query/question length limits.
+- Generated storage names (validated against a strict pattern before any path is built), path
+  containment check, storage outside the static web root; downloads are always
+  `Content-Disposition: attachment` with `nosniff`.
 - SQLAlchemy parameter binding; FTS query terms quoted by the application.
 - Uniform error responses with no stack traces; request IDs for correlation.
 - Logs contain IDs, sizes, durations and error codes — not document text, questions or keys.

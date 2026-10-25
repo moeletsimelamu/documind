@@ -7,6 +7,7 @@ import uuid
 from http import HTTPStatus
 
 from starlette.datastructures import Headers, MutableHeaders
+from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -74,7 +75,18 @@ class RequestContextMiddleware:
         method: str = scope["method"]
         extra_headers = _headers_for(path)
         extra_headers["X-Request-ID"] = request_id
-        response_state = {"status": 0, "started": False}
+        response_state = {"status": 0, "started": False, "logged": False}
+        started_at = time.perf_counter()
+
+        def log_access() -> None:
+            if response_state["logged"]:
+                return
+            response_state["logged"] = True
+            elapsed_ms = (time.perf_counter() - started_at) * 1000
+            # Path only: query strings can contain search terms and are deliberately not logged.
+            access_logger.info(
+                "%s %s -> %s (%.1f ms)", method, path, response_state["status"], elapsed_ms
+            )
 
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
@@ -84,8 +96,11 @@ class RequestContextMiddleware:
                 for name, value in extra_headers.items():
                     headers.setdefault(name, value)
             await send(message)
+            if message["type"] == "http.response.body" and not message.get("more_body", False):
+                # Logged when the response is complete, so background work that runs after it
+                # (document processing) is not counted as request time.
+                log_access()
 
-        started_at = time.perf_counter()
         try:
             await self.app(scope, receive, send_with_headers)
         except Exception:
@@ -100,9 +115,49 @@ class RequestContextMiddleware:
             )
             await response(scope, receive, send_with_headers)
         finally:
-            elapsed_ms = (time.perf_counter() - started_at) * 1000
-            # Path only: query strings can contain search terms and are deliberately not logged.
-            access_logger.info(
-                "%s %s -> %s (%.1f ms)", method, path, response_state["status"], elapsed_ms
-            )
+            log_access()  # if the response never completed (e.g. the client disconnected)
             request_id_var.reset(token)
+
+
+class UploadSizeLimitMiddleware:
+    """Stops oversized uploads while they are being received, before they are parsed.
+
+    ``Content-Length`` is checked first; the body is also counted as it arrives, because the
+    header can be missing (chunked encoding) or wrong. The precise per-file limit is enforced
+    again when the file is copied into storage.
+    """
+
+    # Room for the multipart boundaries and part headers around the file itself.
+    MULTIPART_OVERHEAD_BYTES = 64 * 1024
+
+    def __init__(self, app: ASGIApp, *, path: str, max_file_bytes: int, message: str) -> None:
+        self.app = app
+        self.path = path
+        self.max_body_bytes = max_file_bytes + self.MULTIPART_OVERHEAD_BYTES
+        self.message = message
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["method"] != "POST" or scope["path"] != self.path:
+            await self.app(scope, receive, send)
+            return
+
+        declared = Headers(scope=scope).get("content-length")
+        if declared is not None and declared.isdigit() and int(declared) > self.max_body_bytes:
+            response = error_response(
+                Request(scope), HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "file_too_large", self.message
+            )
+            await response(scope, receive, send)
+            return
+
+        received = 0
+
+        async def counting_receive() -> Message:
+            nonlocal received
+            message = await receive()
+            if message["type"] == "http.request":
+                received += len(message.get("body", b""))
+                if received > self.max_body_bytes:
+                    raise HTTPException(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, self.message)
+            return message
+
+        await self.app(scope, counting_receive, send)

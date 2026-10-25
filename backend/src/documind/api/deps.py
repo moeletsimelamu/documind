@@ -7,6 +7,8 @@ from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from documind.config import Settings
+from documind.ingestion.pipeline import DocumentProcessor
+from documind.storage import LocalFileStorage
 
 
 def get_settings(request: Request) -> Settings:
@@ -23,5 +25,17 @@ def get_session(request: Request) -> Iterator[Session]:
         session.close()
 
 
+def get_storage(request: Request) -> LocalFileStorage:
+    storage: LocalFileStorage = request.app.state.storage
+    return storage
+
+
+def get_processor(request: Request) -> DocumentProcessor:
+    processor: DocumentProcessor = request.app.state.processor
+    return processor
+
+
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 SessionDep = Annotated[Session, Depends(get_session)]
+StorageDep = Annotated[LocalFileStorage, Depends(get_storage)]
+ProcessorDep = Annotated[DocumentProcessor, Depends(get_processor)]

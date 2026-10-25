@@ -1,8 +1,9 @@
 import logging
+import time
 from collections.abc import Iterator
 
 import pytest
-from fastapi import FastAPI
+from fastapi import BackgroundTasks, FastAPI
 from fastapi.testclient import TestClient
 
 from documind.errors import AppError, NotFoundError
@@ -132,3 +133,23 @@ def test_access_log_omits_query_string(
     assert messages == [messages[0]]
     assert messages[0].startswith("GET /api/health -> 200")
     assert "confidential" not in messages[0]
+
+
+def test_access_log_time_excludes_background_work(
+    app: FastAPI, caplog: pytest.LogCaptureFixture
+) -> None:
+    def slow_background_job() -> None:
+        time.sleep(1.5)
+
+    def endpoint(background: BackgroundTasks) -> dict[str, str]:
+        background.add_task(slow_background_job)
+        return {"status": "accepted"}
+
+    app.add_api_route("/api/test/background", endpoint)
+    with TestClient(app) as client, caplog.at_level(logging.INFO, logger="documind.access"):
+        client.get("/api/test/background")
+
+    (record,) = [r for r in caplog.records if r.name == "documind.access"]
+    # The message ends "(<elapsed> ms)".
+    elapsed_ms = float(record.getMessage().rsplit("(", 1)[1].removesuffix(" ms)"))
+    assert elapsed_ms < 1000

@@ -64,7 +64,7 @@ def error_response(
 _STATUS_CODES = {
     HTTPStatus.NOT_FOUND: "not_found",
     HTTPStatus.METHOD_NOT_ALLOWED: "method_not_allowed",
-    HTTPStatus.REQUEST_ENTITY_TOO_LARGE: "payload_too_large",
+    HTTPStatus.REQUEST_ENTITY_TOO_LARGE: "file_too_large",  # only uploads have bodies this big
 }
 
 

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     max_pdf_pages: int = Field(default=500, ge=1, le=5000)
     max_extracted_chars: int = Field(default=2_000_000, ge=1_000)
     max_concurrent_processing: int = Field(default=2, ge=1, le=8)
+    extraction_timeout_seconds: float = Field(default=120.0, gt=0, le=3600)
     max_query_chars: int = Field(default=300, ge=10, le=2000)
     max_question_chars: int = Field(default=1000, ge=10, le=4000)
 

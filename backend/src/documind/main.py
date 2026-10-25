@@ -10,12 +10,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from documind import __version__
-from documind.api import health
+from documind.api import documents, health
 from documind.config import Settings
 from documind.db import create_db_engine, create_session_factory, init_schema
 from documind.errors import register_error_handlers
+from documind.ingestion.pipeline import DocumentProcessor, too_large_message
 from documind.logging_setup import configure_logging
-from documind.middleware import RequestContextMiddleware
+from documind.middleware import RequestContextMiddleware, UploadSizeLimitMiddleware
+from documind.storage import LocalFileStorage
 
 logger = logging.getLogger(__name__)
 
@@ -24,11 +26,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings if settings is not None else Settings()
     configure_logging(settings.log_level)
     engine = create_db_engine(settings.database_path)
+    session_factory = create_session_factory(engine)
+    storage = LocalFileStorage(settings.uploads_dir)
+    processor = DocumentProcessor(session_factory, storage, settings)
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         settings.ensure_directories()
         init_schema(engine)
+        processor.recover_after_restart()
         logger.info(
             "DocuMind %s started: data directory %s, AI answers %s",
             __version__,
@@ -50,9 +56,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.engine = engine
-    app.state.session_factory = create_session_factory(engine)
+    app.state.session_factory = session_factory
+    app.state.storage = storage
+    app.state.processor = processor
 
     register_error_handlers(app)
+    # RequestContextMiddleware is added last so it is outermost: request IDs and security
+    # headers also apply to responses produced by the size limiter.
+    app.add_middleware(
+        UploadSizeLimitMiddleware,
+        path="/api/documents",
+        max_file_bytes=settings.max_upload_bytes,
+        message=too_large_message(settings),
+    )
     app.add_middleware(RequestContextMiddleware)
     app.include_router(health.router, prefix="/api")
+    app.include_router(documents.router, prefix="/api")
     return app

@@ -9,7 +9,7 @@ report in `docs/phase-reports/`.
 |---|---|---|
 | 1 | Discovery and architecture | Done |
 | 2 | Backend foundation | Done |
-| 3 | Ingestion and indexing | Not started |
+| 3 | Ingestion and indexing | Done |
 | 4 | Search and retrieval | Not started |
 | 5 | Frontend and design | Not started |
 | 6 | Optional AI answers | Not started |
@@ -88,6 +88,10 @@ commands are executed as written.
 | D10 | OpenAI-compatible chat API as the optional provider, via httpx behind an interface | Owner's choice (2026-10-25). Covers OpenAI and local servers (Ollama, LM Studio). |
 | D13 | httpx2 instead of httpx | Starlette 1.10 (via FastAPI 0.162) deprecates httpx for its test client; httpx2 is the maintained successor. |
 | D14 | `requires-python >=3.12`, constraints file for transitive pins | Lets reviewers on 3.12/3.13 install; CI must prove it (Phase 8). |
+| D15 | Extraction runs in a spawned process with a 120 s hard timeout | pypdf has had infinite-loop and decompression-bomb bugs; a thread cannot be stopped. Costs about 2.4 s per document on Windows; 500 dense pages take 10 s. |
+| D16 | The extraction worker gets a file path, not bytes; the parent also waits on the process sentinel | Large start-up payloads blocked forever when the worker died early; start-up crashes were only detected at the timeout. Both reproduced, then fixed. |
+| D17 | `cryptography` added | Needed for AES-encrypted PDFs, including the common empty-password kind. |
+| D18 | Interrupted documents are marked failed on restart, not re-queued | Avoids a crash loop if a document caused the shutdown; the user deletes and re-uploads. |
 | D12 | Commits use `Moeletsi Melamu <moeletsimelamu03@gmail.com>`, set in the repo's local config | Owner's choice (2026-10-25). |
 | D11 | Single container: FastAPI serves the built SPA | One process to run; same-origin, no CORS. |
 
