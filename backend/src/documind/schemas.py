@@ -1,5 +1,6 @@
 """Pydantic models for API requests and responses."""
 
+import uuid
 from datetime import datetime
 from typing import Literal
 
@@ -116,3 +117,18 @@ class ChunkDetail(BaseModel):
     line_start: int | None
     line_end: int | None
     text: str
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=1)
+    document_ids: list[uuid.UUID] | None = Field(default=None, max_length=50)
+
+
+class AskResponse(BaseModel):
+    mode: Literal["generated", "retrieval_only", "insufficient_evidence"]
+    question: str
+    searched_for: list[str]
+    # Generated text; always null unless mode is "generated".
+    answer: str | None = None
+    # The retrieved passages the response is based on, best first.
+    passages: list[SearchHit]

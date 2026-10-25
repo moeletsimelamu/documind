@@ -11,7 +11,7 @@ report in `docs/phase-reports/`.
 | 2 | Backend foundation | Done |
 | 3 | Ingestion and indexing | Done |
 | 4 | Search and retrieval | Done |
-| 5 | Frontend and design | Not started |
+| 5 | Frontend and design | Done |
 | 6 | Optional AI answers | Not started |
 | 7 | Integration hardening | Not started |
 | 8 | Automated testing and CI | Not started |
@@ -94,6 +94,10 @@ commands are executed as written.
 | D18 | Interrupted documents are marked failed on restart, not re-queued | Avoids a crash loop if a document caused the shutdown; the user deletes and re-uploads. |
 | D19 | Highlights from FTS5 `highlight()`, returned as offsets | Matches exactly what the index matched (stemming); no HTML in the API. |
 | D20 | No synonyms, embeddings or chunk overlap yet | Evaluation: keyword questions 100% hit@5; misses are vocabulary gaps, none caused by chunk boundaries. Semantic retrieval is the documented next step. |
+| D21 | Retrieval-only `POST /api/ask` built in Phase 5 | The Ask workspace needed a real endpoint; generation is layered on in Phase 6. |
+| D22 | Angular 21.2 with exact pins and a `vite` override to 7.3.7 | npm 10.9 resolver crash on newer Vite's optional peers; 7.3.7 is what `@angular/build` pins. |
+| D23 | Native `<dialog>`, no Angular CDK or UI kit | Platform modality and inert background; fewer dependencies. |
+| D24 | 5xx without the API envelope = server unreachable | The API always sends its envelope; the dev proxy and reverse proxies do not. |
 | D12 | Commits use `Moeletsi Melamu <moeletsimelamu03@gmail.com>`, set in the repo's local config | Owner's choice (2026-10-25). |
 | D11 | Single container: FastAPI serves the built SPA | One process to run; same-origin, no CORS. |
 

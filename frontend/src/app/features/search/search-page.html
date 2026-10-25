@@ -1,0 +1,107 @@
+<div class="page">
+  <div class="page-header">
+    <h1>Search</h1>
+  </div>
+
+  <form class="search-form" role="search" (submit)="submit($event)">
+    <div class="field query">
+      <label for="search-query">Words to find</label>
+      <input
+        id="search-query"
+        class="input"
+        type="search"
+        [value]="draft()"
+        (input)="draft.set($any($event.target).value)"
+        [attr.maxlength]="config.config().max_query_chars"
+        autocomplete="off"
+        aria-describedby="search-hint"
+      />
+    </div>
+    <div class="field">
+      <label for="search-scope">In</label>
+      <select id="search-scope" class="input" (change)="scope.set($any($event.target).value)">
+        <option value="" [selected]="scope() === ''">All documents</option>
+        @for (document of library.readyDocuments(); track document.id) {
+          <option [value]="document.id" [selected]="scope() === document.id">
+            {{ document.name }}
+          </option>
+        }
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary" [disabled]="!draft().trim()">
+      <dm-icon name="search" /> Search
+    </button>
+  </form>
+  <p id="search-hint" class="hint">
+    Matches words and word forms ("delivery" also finds "deliveries"), not meaning. Put a phrase in
+    quotes to match it exactly.
+  </p>
+
+  <section class="results" aria-labelledby="results-heading" [attr.aria-busy]="loading()">
+    <h2 id="results-heading" class="visually-hidden">Results</h2>
+
+    @if (loading()) {
+      <p class="status" role="status">
+        <span class="spinner" aria-hidden="true"></span> Searching…
+      </p>
+    } @else if (error(); as err) {
+      <div class="banner banner-error" role="alert">
+        <dm-icon name="alert" />
+        <p>{{ err.message }}</p>
+      </div>
+    } @else if (response(); as result) {
+      <p class="status" role="status">
+        @if (result.total_passages) {
+          <strong class="tabular">{{ plural(result.total_passages, 'passage') }}</strong> in
+          {{ plural(result.total_documents, 'document') }}
+        } @else {
+          <strong>No passages found</strong>
+        }
+        @if (result.searched_for.length) {
+          <span class="searched">
+            · searched for
+            @for (term of result.searched_for; track term; let last = $last) {
+              <q>{{ term }}</q
+              >{{ last ? '' : ', ' }}
+            }
+          </span>
+        }
+        @if (doc()) {
+          <span class="searched">· in {{ documentName(doc()!) }}</span>
+        }
+      </p>
+
+      @if (!result.total_passages) {
+        <div class="empty">
+          <h2>No passages contain these words</h2>
+          <p>
+            Try fewer words, another form of the word, or a term the document itself would use.
+            Search does not match synonyms.
+          </p>
+        </div>
+      } @else {
+        <ol class="hits">
+          @for (hit of result.results; track hit.chunk_id) {
+            <li><dm-passage-card [hit]="hit" /></li>
+          }
+        </ol>
+        @if (result.total_passages > result.results.length) {
+          <p class="subtle more-note">
+            Showing the best {{ plural(result.results.length, 'match', 'matches') }}. Add words to
+            narrow the search.
+          </p>
+        }
+      }
+    } @else if (!library.loaded() || library.documents().length) {
+      <div class="empty">
+        <h2>Search inside your documents</h2>
+        <p>Every result shows where it came from and opens the document at that passage.</p>
+      </div>
+    } @else {
+      <div class="empty">
+        <h2>Nothing to search yet</h2>
+        <p>Upload documents to your library first.</p>
+      </div>
+    }
+  </section>
+</div>

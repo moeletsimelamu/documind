@@ -1,0 +1,142 @@
+<div class="page">
+  <div class="page-header">
+    <h1>Ask</h1>
+    @if (session.entries().length) {
+      <button
+        type="button"
+        class="btn btn-quiet"
+        (click)="session.clear()"
+        [disabled]="session.busy()"
+      >
+        Clear questions
+      </button>
+    }
+  </div>
+
+  <form class="composer" (submit)="submit($event)">
+    <div class="field">
+      <label for="question">Your question</label>
+      <textarea
+        #questionField
+        id="question"
+        class="input"
+        rows="3"
+        (input)="draft.set($any($event.target).value)"
+        (keydown)="onKeydown($event)"
+        [attr.aria-invalid]="tooLong()"
+        aria-describedby="question-hint"
+        placeholder="e.g. What budget was approved for Project Falcon?"
+      ></textarea>
+      <p id="question-hint" class="hint">
+        Enter to ask, Shift+Enter for a new line.
+        <span class="tabular" [class.field-error]="tooLong()">
+          {{ draft().length }} / {{ maxChars() }}
+        </span>
+      </p>
+    </div>
+    <div class="composer-row">
+      <div class="field scope">
+        <label for="ask-scope">Look in</label>
+        <select id="ask-scope" class="input" (change)="scope.set($any($event.target).value)">
+          <option value="" [selected]="scope() === ''">All documents</option>
+          @for (document of library.readyDocuments(); track document.id) {
+            <option [value]="document.id" [selected]="scope() === document.id">
+              {{ document.name }}
+            </option>
+          }
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary" [disabled]="!canAsk()">
+        @if (session.busy()) {
+          <span class="spinner" aria-hidden="true"></span> Asking…
+        } @else {
+          Ask
+        }
+      </button>
+    </div>
+  </form>
+
+  @if (!config.config().llm_enabled) {
+    <p class="mode-note subtle">
+      <dm-icon name="question" />
+      AI answers are off on this server, so DocuMind answers with the passages most likely to
+      contain the answer. Nothing is generated.
+    </p>
+  }
+
+  <p class="visually-hidden" aria-live="polite">{{ announcement() }}</p>
+
+  @if (!session.entries().length) {
+    <div class="empty">
+      <h2>Ask about your documents</h2>
+      <p>
+        DocuMind looks for passages that match your question and shows exactly where each one comes
+        from. Questions and answers stay in this browser tab only.
+      </p>
+      @if (library.loaded() && !library.readyDocuments().length) {
+        <a class="btn" routerLink="/library">Upload documents first</a>
+      }
+    </div>
+  }
+
+  @for (entry of session.entries(); track entry.id) {
+    <article class="entry" [attr.aria-labelledby]="'question-' + entry.id">
+      <h2 class="question" [id]="'question-' + entry.id">{{ entry.question }}</h2>
+      <p class="subtle scope-note">Looked in: {{ entry.scopeName ?? 'all documents' }}</p>
+
+      @switch (entry.state) {
+        @case ('loading') {
+          <p class="working" role="status">
+            <span class="spinner" aria-hidden="true"></span> Looking for relevant passages…
+          </p>
+        }
+        @case ('error') {
+          <div class="banner banner-error" role="alert">
+            <dm-icon name="alert" />
+            <p>{{ entry.error?.message }}</p>
+            <button
+              type="button"
+              class="btn"
+              (click)="session.retry(entry.id)"
+              [disabled]="session.busy()"
+            >
+              Try again
+            </button>
+          </div>
+        }
+        @case ('done') {
+          @if (entry.response; as response) {
+            @if (response.mode === 'insufficient_evidence') {
+              <div class="insufficient">
+                <h3>Not enough in your documents to answer this</h3>
+                <p>
+                  No passage contains the words
+                  @for (term of response.searched_for; track term; let last = $last) {
+                    <q>{{ term }}</q
+                    >{{ last ? '.' : ', ' }}
+                  }
+                  Try the words the document itself would use — DocuMind matches words, not meaning
+                  — or check that the right document is in your library and ready.
+                </p>
+              </div>
+            } @else {
+              <div class="response">
+                <h3 class="response-label">
+                  Relevant passages
+                  <span class="subtle"
+                    >· {{ plural(response.passages.length, 'source') }}, best match first</span
+                  >
+                </h3>
+                <ol class="sources">
+                  @for (hit of response.passages; track hit.chunk_id; let i = $index) {
+                    <li><dm-passage-card [hit]="hit" [label]="'S' + (i + 1)" /></li>
+                  }
+                </ol>
+              </div>
+            }
+          }
+        }
+      }
+    </article>
+  }
+</div>

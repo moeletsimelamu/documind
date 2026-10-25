@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from documind import __version__
-from documind.api import documents, health, search
+from documind.api import ask, documents, health, search
 from documind.config import Settings
 from documind.db import create_db_engine, create_session_factory, init_schema
 from documind.errors import register_error_handlers
@@ -73,4 +73,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router, prefix="/api")
     app.include_router(documents.router, prefix="/api")
     app.include_router(search.router, prefix="/api")
+    app.include_router(ask.router, prefix="/api")
     return app

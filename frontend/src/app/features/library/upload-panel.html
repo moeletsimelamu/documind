@@ -1,0 +1,86 @@
+<section aria-labelledby="upload-heading">
+  <h2 id="upload-heading" class="visually-hidden">Upload documents</h2>
+  <div
+    class="dropzone"
+    [class.dragging]="dragging()"
+    (dragover)="onDragOver($event)"
+    (dragleave)="dragging.set(false)"
+    (drop)="onDrop($event)"
+  >
+    <dm-icon name="upload" />
+    <p>
+      <strong>Drop PDF or TXT files here</strong>
+      <span class="hint">
+        Up to {{ limit() }} each. Text-based PDFs only — scanned pages can't be read.
+      </span>
+    </p>
+    <label class="btn btn-primary">
+      Choose files
+      <input
+        #fileInput
+        class="visually-hidden"
+        type="file"
+        multiple
+        accept=".pdf,.txt,application/pdf,text/plain"
+        (change)="choose(fileInput)"
+      />
+    </label>
+  </div>
+
+  <p class="visually-hidden" aria-live="polite">{{ announcement() }}</p>
+
+  @if (queue.items().length) {
+    <div class="queue">
+      <div class="queue-head">
+        <h3>Uploads</h3>
+        @if (queue.hasFinished()) {
+          <button type="button" class="btn btn-quiet" (click)="queue.clearFinished()">
+            Clear finished
+          </button>
+        }
+      </div>
+      <ul>
+        @for (item of queue.items(); track item.key) {
+          <li [class.problem]="item.state === 'failed' || item.state === 'rejected'">
+            <div class="row">
+              <span class="name">{{ item.name }}</span>
+              <span class="subtle tabular">{{ formatBytes(item.size) }}</span>
+              <dm-status-badge [status]="item.state" />
+              @if (item.state === 'ready' || item.state === 'failed' || item.state === 'rejected') {
+                <button
+                  type="button"
+                  class="dismiss"
+                  [attr.aria-label]="'Dismiss ' + item.name"
+                  (click)="queue.dismiss(item.key)"
+                >
+                  <dm-icon name="close" />
+                </button>
+              }
+            </div>
+            @if (item.state === 'uploading') {
+              <progress
+                max="100"
+                [value]="item.progress"
+                [attr.aria-label]="'Uploading ' + item.name"
+              ></progress>
+            }
+            @if (item.message) {
+              <p class="message">
+                {{ item.message }}
+                @if (item.existingId) {
+                  <a [routerLink]="['/documents', item.existingId]">Open it</a>
+                }
+              </p>
+            }
+            @if (item.state === 'ready' && item.documentId) {
+              <p class="message ok">
+                Indexed and searchable.
+                <a [routerLink]="['/documents', item.documentId]">Open</a>
+              </p>
+            }
+          </li>
+        }
+      </ul>
+    </div>
+  }
+</section>

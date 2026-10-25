@@ -1,7 +1,7 @@
 # DocuMind — Design
 
-Status: **Phase 1 direction.** Tokens and layouts below are the starting specification; they are
-refined during Phase 5 browser review and this file is updated to match what ships.
+Status: **implemented in Phase 5.** Sections 1–8 are the specification; section 9 records where
+the built interface differs from it and why, after review in a browser.
 
 ## 1. Who it is for and what they do
 
@@ -171,7 +171,7 @@ Weights: 400, 600 (headings, labels). No weights above 600.
 | Status badge | Word + glyph: `◌ Processing` (accent), `✓ Ready` (success), `! Failed` (danger), `▢ No text found` (warning). |
 | Banner | Inline info / warning / error with an action where one exists (e.g. "Retry"). |
 | Toast | Short confirmation ("Deleted report.pdf"), polite live region, 4s; never for errors that need action. |
-| Dialog | Angular CDK dialog: focus trapped, Esc closes, focus returns to the trigger. Used for delete confirmation. |
+| Dialog | Native `<dialog>` with `showModal()`: background inert, Esc closes, focus returns to the trigger (or to the page if the trigger was removed). Used for delete confirmation. |
 | Excerpt | Serif text, amber rule, source label line; highlight spans rendered as text nodes. |
 | Skeleton | Line-shaped placeholders while first loading; announced "Loading…". |
 | API unavailable | Full-width banner "Can't reach the DocuMind server. Retrying…" with manual retry; existing content stays visible. |
@@ -187,3 +187,24 @@ Icons: a small set of inline SVGs (upload, search, file, trash, external, chevro
 - Drop zone is also a normal file button; nothing requires drag and drop.
 - Usable at 320px width and at 200% zoom without horizontal scrolling.
 - Checked in Phase 9 with keyboard-only walkthroughs and automated checks; results go in REVIEW.md.
+
+## 9. As built (Phase 5)
+
+Checked in the in-app browser at 1280×800 and 375×812 against the real API. Differences from the
+specification above:
+
+| Area | Specification | Built | Why |
+|---|---|---|---|
+| Dialog | Angular CDK dialog | Native `<dialog>` | The platform element provides modality, inert background and Esc; no extra dependency. |
+| Reader | Page index column for jumping | Page dividers in the text; passages load 60 at a time with "Show earlier text" / "Show more text" | The API pages passages by position, not by page; an index would need a new endpoint. Citations still open at the exact passage. |
+| Ask layout | Thread with a sticky Sources column | Composer at the top, newest question first; in retrieval-only mode the passages *are* the response and are shown inline as numbered sources S1…Sn | Without generated text there is nothing for a side panel to annotate. The side panel is revisited with generated answers in Phase 6. |
+| Library filters | (not specified) | Name and status filters work on the loaded list, instantly | A single user's library is small; the server-side filters remain available in the API. |
+| Upload queue | (not specified) | Shown in the order files were chosen, two uploads at a time, real byte progress, then the server's processing state | — |
+| Skeleton | Animated placeholders | Static grey bars | Avoids motion with no information value. |
+| Fonts | Source Sans 3 / Source Serif 4 | Latin subsets only: Sans 400/600, Serif 400/400 italic/600, self-hosted | Smaller downloads; no third-party font requests. |
+
+Status words in use: *Waiting*, *Uploading*, *Processing* (with a spinner), *Ready* ✓, *Failed* !,
+*No text found* ▢ (scanned PDFs), *Not uploaded* ! (rejected before or at upload).
+
+Outage handling: if the API cannot be reached, a banner says so, existing content stays on screen,
+the health endpoint is polled every 5 s, and configuration and the library reload when it answers.

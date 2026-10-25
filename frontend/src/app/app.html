@@ -1,0 +1,79 @@
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="bar">
+  <div class="bar-inner">
+    <a class="wordmark" routerLink="/library" aria-label="DocuMind, go to library">
+      <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+        <path d="M9 7h9l5 5v13H9z" fill="#fff" />
+        <path d="M18 7v5h5" fill="#d9dee5" />
+        <rect x="12" y="15" width="8" height="3" fill="#ffe680" />
+        <rect x="12" y="20" width="6" height="1.5" fill="#7d8796" />
+      </svg>
+      <span>DocuMind</span>
+    </a>
+
+    <nav class="nav" aria-label="Main">
+      <a routerLink="/library" routerLinkActive="active" ariaCurrentWhenActive="page">Library</a>
+      <a routerLink="/search" routerLinkActive="active" ariaCurrentWhenActive="page">Search</a>
+      <a routerLink="/ask" routerLinkActive="active" ariaCurrentWhenActive="page">Ask</a>
+    </nav>
+
+    <form class="bar-search" role="search" (submit)="search($event, query)">
+      <label class="visually-hidden" for="global-search">Search your documents</label>
+      <input
+        #query
+        id="global-search"
+        type="search"
+        placeholder="Search documents"
+        maxlength="300"
+        autocomplete="off"
+      />
+      <button type="submit" aria-label="Search"><dm-icon name="search" /></button>
+    </form>
+  </div>
+</header>
+
+@if (!connection.online()) {
+  <div class="outage" role="alert">
+    <div class="outage-inner banner banner-error">
+      <dm-icon name="alert" />
+      <p>
+        Can't reach the DocuMind server. Your documents are safe on the server; this page will
+        reconnect automatically.
+      </p>
+      <button
+        type="button"
+        class="btn"
+        (click)="retryConnection()"
+        [disabled]="connection.checking()"
+      >
+        @if (connection.checking()) {
+          <span class="spinner" aria-hidden="true"></span> Checking…
+        } @else {
+          Try again
+        }
+      </button>
+    </div>
+  </div>
+}
+
+<main id="main" tabindex="-1">
+  <router-outlet />
+</main>
+
+<div class="toasts" aria-live="polite" aria-atomic="false">
+  @for (toast of toasts.toasts(); track toast.id) {
+    <div class="toast">
+      <dm-icon name="check" />
+      <span>{{ toast.message }}</span>
+      <button
+        type="button"
+        class="toast-close"
+        aria-label="Dismiss"
+        (click)="toasts.dismiss(toast.id)"
+      >
+        <dm-icon name="close" />
+      </button>
+    </div>
+  }
+</div>

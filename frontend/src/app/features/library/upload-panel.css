@@ -1,0 +1,102 @@
+.dropzone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3) var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink-muted);
+}
+
+.dropzone.dragging {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.dropzone p {
+  display: grid;
+  flex: 1 1 260px;
+}
+
+.dropzone strong {
+  color: var(--ink);
+}
+
+.queue {
+  margin-top: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.queue-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 var(--space-2) 0 var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+li {
+  padding: var(--space-2) var(--space-4);
+}
+
+li + li {
+  border-top: 1px solid var(--line);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 32px;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dismiss {
+  display: inline-flex;
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-subtle);
+  cursor: pointer;
+}
+
+progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--accent);
+}
+
+.message {
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.message.ok {
+  color: var(--success);
+}
+
+/* The real file input is visually hidden inside the label, so show its focus on the label. */
+label.btn:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

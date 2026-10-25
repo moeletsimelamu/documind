@@ -1,0 +1,155 @@
+.documents {
+  margin-top: var(--space-6);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.name-filter {
+  flex: 1 1 260px;
+  max-width: 360px;
+}
+
+.filter-count {
+  margin-bottom: var(--space-2);
+}
+
+.doc-table {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-collapse: collapse;
+  background: var(--surface);
+  font-size: var(--text-sm);
+}
+
+th {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  background: var(--desk);
+  color: var(--ink-muted);
+  font-weight: 600;
+  text-align: left;
+}
+
+td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+tbody tr:hover {
+  background: #fafbfc;
+}
+
+.num {
+  text-align: right;
+}
+
+.name-cell {
+  width: 40%;
+}
+
+.doc-link {
+  font-size: var(--text-md);
+  font-weight: 600;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.doc-link:hover {
+  text-decoration: underline;
+}
+
+.note {
+  display: block;
+  color: var(--ink-subtle);
+  font-size: var(--text-sm);
+}
+
+.note.failure {
+  color: var(--danger);
+}
+
+.actions {
+  text-align: right;
+}
+
+.actions .btn {
+  padding: 0 var(--space-2);
+}
+
+.stacked-only {
+  display: none;
+}
+
+.dialog-name {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* Narrow screens: rows become stacked cards, no horizontal scrolling. */
+@media (max-width: 767px) {
+  thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .doc-table,
+  tbody,
+  tr,
+  td {
+    display: block;
+  }
+
+  .doc-table {
+    border: 0;
+    background: transparent;
+  }
+
+  tr {
+    display: grid;
+    grid-template-columns: repeat(3, auto) 1fr;
+    gap: var(--space-1) var(--space-3);
+    margin-bottom: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  td {
+    padding: 0;
+    border: 0;
+    color: var(--ink-muted);
+  }
+
+  .name-cell {
+    grid-column: 1 / -1;
+    width: auto;
+  }
+
+  .num {
+    text-align: left;
+  }
+
+  .no-value,
+  .type {
+    display: none;
+  }
+
+  .stacked-only {
+    display: inline;
+  }
+
+  .actions {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+}

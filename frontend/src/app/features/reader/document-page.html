@@ -1,0 +1,149 @@
+<div class="page">
+  <a class="back" routerLink="/library">← Library</a>
+
+  @if (loadError(); as error) {
+    @if (error.status === 404) {
+      <div class="empty">
+        <h1>Document not found</h1>
+        <p>This document doesn't exist. It may have been deleted.</p>
+        <a class="btn btn-primary" routerLink="/library">Go to the library</a>
+      </div>
+    } @else {
+      <div class="banner banner-error" role="alert">
+        <dm-icon name="alert" />
+        <p>Couldn't load this document. {{ error.message }}</p>
+        <button type="button" class="btn" (click)="load(id(), targetId())">Try again</button>
+      </div>
+    }
+  } @else if (document(); as doc) {
+    <header class="doc-header">
+      <div class="title-block">
+        <h1>{{ doc.name }}</h1>
+        <p class="meta tabular">
+          {{ doc.file_type.toUpperCase() }}
+          @if (doc.page_count !== null) {
+            · {{ plural(doc.page_count, 'page') }}
+          }
+          · {{ formatBytes(doc.size_bytes) }} · added {{ formatDate(doc.created_at) }}
+          <dm-status-badge [status]="doc.status" [failureCode]="doc.failure_code" />
+        </p>
+      </div>
+      <div class="doc-actions">
+        <a class="btn" [href]="fileUrl(doc.id)" download>
+          <dm-icon name="download" /> Download original
+        </a>
+        <button type="button" class="btn" (click)="askToDelete()">
+          <dm-icon name="trash" /> Delete
+        </button>
+      </div>
+    </header>
+
+    @switch (doc.status) {
+      @case ('processing') {
+        <div class="banner banner-info" role="status">
+          <span class="spinner" aria-hidden="true"></span>
+          <p>This document is still being processed. Its text will appear here when it is ready.</p>
+        </div>
+      }
+      @case ('failed') {
+        <div class="banner banner-warning" role="status">
+          <dm-icon name="alert" />
+          <p>
+            <strong>This document could not be indexed.</strong> {{ doc.failure_message }} It is not
+            included in search or answers.
+          </p>
+        </div>
+      }
+      @case ('ready') {
+        <p class="note subtle">
+          Extracted text, as DocuMind indexed it. Layout, images and tables from the original are
+          not shown — download the original to see them.
+          @if (doc.empty_page_count) {
+            {{ plural(doc.empty_page_count, 'page') }} had no extractable text.
+          }
+        </p>
+
+        @if (textError(); as error) {
+          <div class="banner banner-error" role="alert">
+            <dm-icon name="alert" />
+            <p>{{ error.message }}</p>
+          </div>
+        }
+
+        @if (loadingText()) {
+          <div class="reader" aria-busy="true" aria-label="Loading text">
+            <div class="skeleton" style="width: 90%"></div>
+            <div class="skeleton" style="width: 84%"></div>
+            <div class="skeleton" style="width: 88%"></div>
+            <div class="skeleton" style="width: 60%"></div>
+          </div>
+        } @else {
+          <article class="reader" aria-label="Document text">
+            @if (hasEarlier()) {
+              <button
+                type="button"
+                class="btn more"
+                (click)="showEarlier()"
+                [disabled]="loadingMore() !== null"
+              >
+                @if (loadingMore() === 'earlier') {
+                  <span class="spinner" aria-hidden="true"></span>
+                }
+                Show earlier text
+              </button>
+            }
+            @for (passage of chunks(); track passage.id; let i = $index) {
+              @if (showsPageDivider(i)) {
+                <h2 class="page-divider">Page {{ passage.page }}</h2>
+              }
+              <section
+                class="passage"
+                [id]="'chunk-' + passage.id"
+                tabindex="-1"
+                [class.target]="passage.id === targetId()"
+                [attr.aria-label]="passage.id === targetId() ? 'Passage you opened' : null"
+              >
+                @if (passage.line_start !== null) {
+                  <p class="lines tabular">{{ locationLabel(passage) }}</p>
+                }
+                <div class="source-text">{{ passage.text }}</div>
+              </section>
+            }
+            @if (hasLater()) {
+              <button
+                type="button"
+                class="btn more"
+                (click)="showLater()"
+                [disabled]="loadingMore() !== null"
+              >
+                @if (loadingMore() === 'later') {
+                  <span class="spinner" aria-hidden="true"></span>
+                }
+                Show more text
+              </button>
+            }
+          </article>
+        }
+      }
+    }
+  } @else {
+    <div aria-busy="true" aria-label="Loading document">
+      <div class="skeleton" style="width: 40%; height: 28px"></div>
+      <div class="skeleton" style="width: 30%"></div>
+    </div>
+  }
+</div>
+
+<dm-confirm-dialog
+  heading="Delete this document?"
+  [busy]="deleting()"
+  [error]="deleteError()"
+  (confirmed)="confirmDelete()"
+>
+  @if (document(); as doc) {
+    <p>
+      <strong class="dialog-name">{{ doc.name }}</strong> will be removed from your library,
+      together with its stored file and everything indexed from it. This cannot be undone.
+    </p>
+  }
+</dm-confirm-dialog>

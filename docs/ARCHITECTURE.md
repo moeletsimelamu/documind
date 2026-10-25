@@ -1,8 +1,8 @@
 # DocuMind — Architecture
 
-Status: **Phase 4 complete** — the backend foundation, the document-ingestion pipeline and
-keyword search (with an evaluation set) are built and tested. Question answering and the frontend
-are the design for later phases and are marked *(planned)* where it matters.
+Status: **Phase 5 complete** — backend (ingestion, keyword search, retrieval-only question
+answering) and the Angular frontend are built, tested and checked together in a browser. Generated
+answers (§9 steps 4–6) are *(planned, Phase 6)*.
 
 ## 1. Scope and trust model
 
@@ -90,7 +90,7 @@ DocuMind/
 │  │  ├─ retrieval.py †     query parsing, FTS5 search, highlights, excerpts
 │  │  └─ answering/         provider.py, openai_compatible.py, prompt.py, service.py
 │  └─ tests/ †              unit + API tests; pdf_factory.py generates test PDFs; eval/ dataset
-├─ frontend/                Angular 21 workspace
+├─ frontend/ †              Angular 21 workspace (see §14)
 ├─ docs/                    ARCHITECTURE, DESIGN, PLAN, REVIEW, DEPLOYMENT, phase-reports/
 ├─ .github/workflows/ci.yml
 ├─ Dockerfile, .dockerignore, .env.example
@@ -277,7 +277,8 @@ are allowed; they are told apart by upload time.
 
 ## 9. Question answering
 
-`POST /api/ask { question, document_ids? }`
+`POST /api/ask { question, document_ids? }` — steps 1–3 are implemented (`answering/service.py`,
+`api/ask.py`); steps 4–6 are planned for Phase 6.
 
 1. Retrieve the top `ASK_TOP_K` (6) chunks, capped at `ASK_MAX_CONTEXT_CHARS` (12,000).
 2. **No matching chunks →** `mode: "insufficient_evidence"`; the LLM is not called.
@@ -411,3 +412,39 @@ Verified in Phase 9 and reported in `docs/REVIEW.md`.
   and mobile widths; checks are recorded in the phase reports. Playwright is added only if
   repeatable E2E in CI turns out to be worth its cost.
 - **CI:** GitHub Actions — ruff, mypy, pytest; Angular lint/test/build; Docker image build.
+
+## 14. Frontend
+
+Angular 21.2 (standalone components, signals, zoneless change detection, built-in control flow),
+lazy-loaded routes, no UI library. Exact versions are pinned in `frontend/package.json`.
+
+```
+src/app/
+├─ core/       api.service (typed HTTP), api.models, api-error (error envelope → message),
+│              connection.service (+ interceptor), config.service, library.store,
+│              upload-queue.service, ask-session.service, toast.service, format
+├─ shared/     icon, status-badge, excerpt, passage-card, confirm-dialog
+├─ features/   library/ (page, upload panel), reader/, search/, ask/, not-found
+└─ app.*       shell: top bar, navigation, outage banner, toasts, routes
+```
+
+- **State** lives in small root services built on signals. `LibraryStore` holds the documents the
+  server reported and re-fetches only those still `processing`, every 2 s, until none are.
+  `UploadQueueService` sends one request per file, two at a time, keeps byte progress from
+  `HttpClient` events, and after acceptance takes each file's state from the store.
+  `AskSessionService` keeps the question thread in memory for the tab only.
+- **Routes** carry state that should survive reload or sharing: `/search?q=&doc=`,
+  `/documents/:id?chunk=` (opens and focuses the passage). Route and query parameters are bound to
+  component inputs.
+- **Errors:** every API error is reduced to `{status, code, message}` using the server's envelope.
+  Rule used to detect an unreachable server: the API answers every request — even an unhandled
+  failure — with its JSON envelope, so status 0 or a 5xx *without* the envelope means the request
+  never reached it (the Angular dev proxy answers a bare 500 when the backend is down). That marks
+  the app offline and starts a health poll.
+- **Rendering of document text:** only through interpolation, so text that looks like HTML stays
+  text; highlights come as offsets and are rendered as `<mark>` elements around text nodes.
+- **Development:** `npm start` serves on port 4200 and proxies `/api` to `127.0.0.1:8000`
+  (`proxy.conf.json`), so the browser sees one origin and no CORS is needed.
+- **Dependency note:** npm 10.9 crashes (`Cannot read properties of null (reading 'edgesOut')`)
+  resolving the optional peer dependencies of the newest Vite through Vitest. `package.json`
+  therefore overrides `vite` to 7.3.7, the exact version `@angular/build` 21.2.28 pins.
