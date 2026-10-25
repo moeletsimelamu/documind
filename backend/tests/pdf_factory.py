@@ -1,5 +1,6 @@
 """Builds small, real PDF files for tests, so no personal documents are needed."""
 
+from collections.abc import Sequence
 from io import BytesIO
 
 from pypdf import PdfWriter
@@ -20,7 +21,7 @@ def _content_stream(text: str | None) -> bytes:
     return b"\n".join(lines)
 
 
-def make_pdf(pages: list[str | None]) -> bytes:
+def make_pdf(pages: Sequence[str | None]) -> bytes:
     """A PDF with one page per item: text (lines separated by \\n), or None for no text."""
     objects: list[bytes] = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
@@ -56,7 +57,7 @@ def make_pdf(pages: list[str | None]) -> bytes:
     return output.getvalue()
 
 
-def make_encrypted_pdf(pages: list[str | None], *, user_password: str) -> bytes:
+def make_encrypted_pdf(pages: Sequence[str | None], *, user_password: str) -> bytes:
     writer = PdfWriter(clone_from=BytesIO(make_pdf(pages)))
     writer.encrypt(user_password=user_password, owner_password="owner-secret", algorithm="AES-256")
     output = BytesIO()

@@ -4,8 +4,9 @@ A document knowledge assistant: upload PDFs and text files, search their content
 questions whose answers point back to the exact passages they came from.
 
 **Status: in development.** The backend can accept PDF and text uploads, extract and index their
-text (with page numbers or line ranges), list, download and delete documents — through the HTTP
-API only. Search, question answering and the web interface are not built yet. See
+text (with page numbers or line ranges), list, download and delete documents, and run keyword
+search with highlighted excerpts — through the HTTP API only. Question answering and the web
+interface are not built yet. See
 [docs/PLAN.md](docs/PLAN.md) for progress, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the
 technical design and [docs/DESIGN.md](docs/DESIGN.md) for the interface design.
 

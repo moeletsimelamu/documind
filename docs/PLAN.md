@@ -10,7 +10,7 @@ report in `docs/phase-reports/`.
 | 1 | Discovery and architecture | Done |
 | 2 | Backend foundation | Done |
 | 3 | Ingestion and indexing | Done |
-| 4 | Search and retrieval | Not started |
+| 4 | Search and retrieval | Done |
 | 5 | Frontend and design | Not started |
 | 6 | Optional AI answers | Not started |
 | 7 | Integration hardening | Not started |
@@ -92,6 +92,8 @@ commands are executed as written.
 | D16 | The extraction worker gets a file path, not bytes; the parent also waits on the process sentinel | Large start-up payloads blocked forever when the worker died early; start-up crashes were only detected at the timeout. Both reproduced, then fixed. |
 | D17 | `cryptography` added | Needed for AES-encrypted PDFs, including the common empty-password kind. |
 | D18 | Interrupted documents are marked failed on restart, not re-queued | Avoids a crash loop if a document caused the shutdown; the user deletes and re-uploads. |
+| D19 | Highlights from FTS5 `highlight()`, returned as offsets | Matches exactly what the index matched (stemming); no HTML in the API. |
+| D20 | No synonyms, embeddings or chunk overlap yet | Evaluation: keyword questions 100% hit@5; misses are vocabulary gaps, none caused by chunk boundaries. Semantic retrieval is the documented next step. |
 | D12 | Commits use `Moeletsi Melamu <moeletsimelamu03@gmail.com>`, set in the repo's local config | Owner's choice (2026-10-25). |
 | D11 | Single container: FastAPI serves the built SPA | One process to run; same-origin, no CORS. |
 

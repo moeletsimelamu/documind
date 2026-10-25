@@ -1,9 +1,8 @@
 # DocuMind — Architecture
 
-Status: **Phase 3 complete** — the backend foundation and the document-ingestion pipeline
-(upload, validation, storage, isolated extraction, chunking, indexing, listing, download, deletion,
-restart recovery) are built and tested. Search, question answering and the frontend are the design
-for later phases and are marked *(planned)* where it matters.
+Status: **Phase 4 complete** — the backend foundation, the document-ingestion pipeline and
+keyword search (with an evaluation set) are built and tested. Question answering and the frontend
+are the design for later phases and are marked *(planned)* where it matters.
 
 ## 1. Scope and trust model
 
@@ -26,7 +25,7 @@ for later phases and are marked *(planned)* where it matters.
  FastAPI application
    ├─ api/            HTTP routers, request/response schemas, error mapping
    ├─ ingestion/      validate → store → extract → normalise → chunk → index
-   ├─ retrieval.py    SQLite FTS5 (BM25) search, excerpts, highlight offsets
+   ├─ retrieval.py    SQLite FTS5 (BM25) keyword search, excerpts, highlight offsets
    ├─ answering/      provider interface, prompt construction, citation validation
    ├─ storage.py      local-disk file storage (the only code that builds file paths)
    ├─ db.py/models.py SQLAlchemy 2.x, SQLite (WAL), schema initialisation
@@ -86,11 +85,11 @@ DocuMind/
 │  │  ├─ models.py †        Document, Chunk ORM models, schema_meta
 │  │  ├─ schemas.py †       Pydantic API models
 │  │  ├─ storage.py †       LocalFileStorage: generated names, containment check, orphan sweep
-│  │  ├─ api/               deps.py †, health.py †, documents.py †, search.py, ask.py
+│  │  ├─ api/               deps.py †, health.py †, documents.py †, search.py †, ask.py
 │  │  ├─ ingestion/ †       validation.py, extraction.py, isolation.py, chunking.py, pipeline.py
-│  │  ├─ retrieval.py       query sanitising, FTS5 search, excerpts
+│  │  ├─ retrieval.py †     query parsing, FTS5 search, highlights, excerpts
 │  │  └─ answering/         provider.py, openai_compatible.py, prompt.py, service.py
-│  └─ tests/ †              unit + API tests; pdf_factory.py generates test PDFs; eval/ planned
+│  └─ tests/ †              unit + API tests; pdf_factory.py generates test PDFs; eval/ dataset
 ├─ frontend/                Angular 21 workspace
 ├─ docs/                    ARCHITECTURE, DESIGN, PLAN, REVIEW, DEPLOYMENT, phase-reports/
 ├─ .github/workflows/ci.yml
@@ -214,25 +213,60 @@ recorded for the Phase 9 review.
 
 ## 7. Retrieval
 
-Baseline: **keyword search with SQLite FTS5, ranked by BM25.** It is transparent, deterministic,
-needs no model downloads and is easy to test. This is lexical matching — the product and docs will
-not call it semantic search.
+Implemented in `retrieval.py`: **keyword search with SQLite FTS5, ranked by BM25.** It is
+transparent, deterministic, needs no model downloads and is easy to test. It is lexical matching —
+it finds words and their stemmed forms ("deliveries" ↔ "delivery", "café" ↔ "cafe"), not meaning,
+and the product never calls it semantic search.
 
-- **Query handling:** the user's text is tokenised by the application; each term is wrapped in
-  double quotes so FTS5 operators in user input (`NEAR`, `*`, `-`, column filters, unbalanced
-  quotes) are treated as plain words. Terms are combined with `OR` and ranked by `bm25()`. A short
-  English stop-word list is removed unless the query consists only of stop words. Text the user
-  puts in double quotes is searched as an exact phrase. Queries are limited to 300 characters.
-- **Scope:** only chunks of `ready` documents, optionally filtered to selected document IDs.
-- **Results:** chunk ID, document ID and name, page or line range, rank, an excerpt (~300
-  characters around the best match) and **highlight offsets** (`[start, end]` pairs). The API
-  never returns HTML; the frontend renders highlights with text nodes, so document text cannot
-  inject markup.
-- **Evaluation (Phase 4):** a small checked-in corpus with ~20 questions and the expected
-  document/page for each, reporting hit@1 and hit@5. Results are recorded honestly, including
-  misses.
-- **Possible improvement:** semantic re-ranking with local embeddings only if the evaluation shows
-  a clear gap, behind a `Retriever` interface, with keyword search remaining the fallback.
+- **Query handling** (`parse_query`): the application extracts runs of letters and digits itself
+  (mirroring FTS5's `unicode61` tokenizer), lower-cases them, drops a short English stop-word list
+  unless nothing else is left, de-duplicates, and caps the query at 32 terms. Text in double quotes
+  is searched as an exact phrase. Every term and phrase is wrapped in double quotes and combined
+  with `OR`, so FTS5 syntax in user input (`NEAR(…)`, `*`, `-`, `^`, `column:`, `AND/NOT`,
+  unbalanced quotes) is searched as ordinary words. A test asserts that every generated expression
+  consists only of quoted alphanumeric runs. Queries over `MAX_QUERY_CHARS` (300) or with no words
+  are rejected with `422` (`query_too_long`, `empty_query`).
+- **Scope:** only chunks of `ready` documents, optionally restricted to up to 50 document IDs.
+- **Ranking and totals:** `ORDER BY bm25(chunks_fts)` (ties broken by document and position), at
+  most 50 passages per request, plus the total number of matching passages and documents.
+- **Highlights** come from FTS5's own `highlight()` function, so they always agree with what the
+  index matched (stemming included). Marker characters are control characters that normalised
+  text can never contain; they are converted to `[start, end)` offsets. The API never returns HTML;
+  the frontend renders highlights as text nodes, so document text cannot inject markup.
+- **Excerpts:** a window of about 320 characters chosen to contain as many highlights as possible,
+  widened to whole words, with flags saying whether text was cut at either end.
+- **Citation target:** `GET /api/chunks/{id}` returns one passage with its document and location.
+
+### Evaluation
+
+`tests/eval/` holds four fictional documents (two text files, two generated PDFs) and 30 questions,
+each with the document and an anchor phrase that the correct passage must contain. Questions are
+labelled *keyword* (they share important words with the answer) or *paraphrase* (same question in
+different words). `python -m tests.eval.run_eval` runs them through the real extraction, chunking
+and search code. Results on 2026-10-25:
+
+| Questions | n | hit@1 | hit@3 | hit@5 | MRR@5 |
+|---|---|---|---|---|---|
+| All | 30 | 77% | 87% | 87% | 0.81 |
+| Keyword | 21 | 95% | 100% | 100% | 0.98 |
+| Paraphrase | 9 | 33% | 56% | 56% | 0.41 |
+
+All four misses are paraphrases with no vocabulary in common with the answer: "memory stick" vs
+"USB storage devices", "profitability go down" vs "gross margin narrowed", "extra storage space" vs
+"additional 2,000 square metres … lease", "workplace accidents" vs "lost-time injuries". Some
+paraphrase hits succeed only through incidental words (e.g. a "Leave" heading in the same chunk).
+`tests/test_retrieval_eval.py` fails the build if keyword hit@5 drops below 95% or overall hit@5
+below 80%.
+
+Caveats: the set is small, and the documents and questions were written by the same author as the
+retrieval code, which flatters the keyword results; the documents are short, so each fits in a few
+chunks. The numbers show the *shape* of the limitation, not production accuracy.
+
+**Not done, deliberately:** synonym lists (brittle and domain-specific) and embedding-based
+retrieval (a model dependency and download). Semantic retrieval is the obvious improvement for the
+paraphrase gap; if added it goes behind a retriever interface with keyword search as the fallback,
+and is described as such. Chunk overlap was not added: no miss in the evaluation was caused by a
+chunk boundary.
 
 ## 8. Duplicate policy
 
@@ -314,7 +348,8 @@ logged.
 | GET | `/api/documents/{id}/chunks?offset=&limit=` | Extracted text, in chunks, for the reader (limit ≤ 200) | 200, 404, 422 |
 | GET | `/api/documents/{id}/file` | Download original (`Content-Disposition: attachment`, `nosniff`) | 200, 404 |
 | DELETE | `/api/documents/{id}` | Delete record, chunks, index rows and stored file | 204, 404 |
-| GET | `/api/search?q=&document_id=&limit=` | Keyword search over indexed chunks | 200, 422 |
+| GET | `/api/search?q=&document_id=&limit=` | Keyword search over indexed chunks (`limit` ≤ 50, `document_id` repeatable) | 200, 422 |
+| GET | `/api/chunks/{id}` | One passage with document name and location (opens citations) | 200, 404 |
 | POST | `/api/ask` | Question answering (see §9) | 200, 422 |
 
 ## 11. Configuration

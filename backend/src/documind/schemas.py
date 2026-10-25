@@ -80,3 +80,39 @@ class ChunkPage(BaseModel):
     offset: int
     limit: int
     items: list[ChunkOut]
+
+
+class SearchHit(BaseModel):
+    chunk_id: int
+    document_id: str
+    document_name: str
+    file_type: str
+    ordinal: int
+    page: int | None
+    line_start: int | None
+    line_end: int | None
+    excerpt: str
+    # [start, end) character offsets into ``excerpt`` of the words that matched the query.
+    highlights: list[tuple[int, int]]
+    excerpt_starts_mid_text: bool
+    excerpt_ends_mid_text: bool
+
+
+class SearchResponse(BaseModel):
+    query: str
+    # The words and phrases actually searched for, after common words were dropped.
+    searched_for: list[str]
+    total_passages: int
+    total_documents: int
+    results: list[SearchHit]
+
+
+class ChunkDetail(BaseModel):
+    id: int
+    document_id: str
+    document_name: str
+    ordinal: int
+    page: int | None
+    line_start: int | None
+    line_end: int | None
+    text: str
