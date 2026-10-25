@@ -1,7 +1,9 @@
 # DocuMind — Architecture
 
-Status: **Phase 1 design.** This document describes the intended architecture. Sections are updated
-as each phase is implemented; anything not yet built is marked *(planned)*.
+Status: **Phase 2 complete** — backend foundation (configuration, logging, error envelope,
+middleware, database schema with the FTS5 index, health/readiness/config endpoints) is built and
+tested. Everything else here is the design for later phases and is marked *(planned)* where it
+matters.
 
 ## 1. Scope and trust model
 
@@ -55,30 +57,35 @@ Windows** with `pip install --dry-run --only-binary=:all:` before being chosen.
 | Multipart parsing | python-multipart | 0.0.32 | Required by FastAPI for uploads. |
 | Persistence | SQLAlchemy + SQLite | 2.1.6, SQLite 3.50.4 | Parameterised queries; FTS5 confirmed available in the local build. |
 | PDF text | pypdf | 6.21.2 | Pure Python, BSD licence, per-page extraction. PyMuPDF was rejected: AGPL licence and a large native dependency. |
-| LLM client | httpx (direct HTTP) | 0.28.1 | Calls any OpenAI-compatible `/chat/completions` endpoint. No vendor SDK: one small, testable client works for hosted and local servers, and httpx is already needed for tests. |
-| Tests | pytest, httpx | 9.1.1, 0.28.1 | FastAPI `TestClient`, temp dirs, isolated DBs. |
+| LLM client | httpx2 (direct HTTP) | 2.16.0 | Calls any OpenAI-compatible `/chat/completions` endpoint. No vendor SDK: one small, testable client works for hosted and local servers. httpx2 is the maintained successor of httpx (same author, Pydantic organisation); Starlette 1.10's test client deprecates httpx in its favour. |
+| Tests | pytest | 9.1.1 | FastAPI `TestClient` (uses httpx2), temp dirs, isolated DBs. Warnings are errors. |
 | Lint / types | ruff, mypy | 0.17.2, 2.4.0 | Run in CI. |
 | Frontend | Angular (LTS line) | 21.2.x | Angular 22 requires Node ≥ 22.22.3; the installed Node 22.14.0 satisfies Angular 21 (`^22.12.0`). The global CLI is also 21.2. |
 
-Direct backend dependencies are pinned exactly in `backend/pyproject.toml`; a fully resolved
-`requirements.lock` is generated and used by CI and the Docker image *(planned, Phase 2)*.
+FastAPI 0.162 brings Starlette 1.10. Direct backend dependencies are pinned exactly in
+`backend/pyproject.toml`; every resolved package (35, including transitive ones) is pinned in
+`backend/constraints.txt`, installed with `pip install -c constraints.txt -e ".[dev]"`.
+`requires-python` is `>=3.12`; so far it is tested only on 3.14 — CI adds 3.12 in Phase 8.
 
-## 4. Repository layout *(planned)*
+## 4. Repository layout
+
+Files marked † exist after Phase 2; the rest are planned.
 
 ```
 DocuMind/
 ├─ backend/
-│  ├─ pyproject.toml
+│  ├─ pyproject.toml †, constraints.txt †
 │  ├─ src/documind/
-│  │  ├─ main.py            app factory, middleware, SPA static mount (prod)
-│  │  ├─ config.py          Settings (env vars, limits)
-│  │  ├─ logging_setup.py   structured logging, request IDs, redaction
-│  │  ├─ errors.py          AppError hierarchy → JSON error responses
-│  │  ├─ db.py              engine, session, PRAGMAs, schema init incl. FTS5
-│  │  ├─ models.py          Document, Chunk ORM models
-│  │  ├─ schemas.py         Pydantic API models
+│  │  ├─ main.py †          app factory; SPA static mount (prod) planned
+│  │  ├─ config.py †        Settings (env vars, limits)
+│  │  ├─ logging_setup.py † log format with request IDs
+│  │  ├─ middleware.py †    request IDs, access log, security headers, unhandled errors
+│  │  ├─ errors.py †        AppError hierarchy → JSON error responses
+│  │  ├─ db.py †            engine, PRAGMAs, schema init incl. FTS5 + triggers
+│  │  ├─ models.py †        Document, Chunk ORM models, schema_meta
+│  │  ├─ schemas.py †       Pydantic API models
 │  │  ├─ storage.py         FileStorage protocol, LocalFileStorage
-│  │  ├─ api/               health.py, documents.py, search.py, ask.py
+│  │  ├─ api/               deps.py †, health.py †, documents.py, search.py, ask.py
 │  │  ├─ ingestion/         validation.py, extraction.py, chunking.py, pipeline.py
 │  │  ├─ retrieval.py       query sanitising, FTS5 search, excerpts
 │  │  └─ answering/         provider.py, openai_compatible.py, prompt.py, service.py
@@ -121,7 +128,10 @@ chunks_fts  — FTS5 external-content table over chunks.text
   kept in sync by AFTER INSERT / AFTER DELETE triggers on chunks
 ```
 
-- `PRAGMA foreign_keys=ON`, `journal_mode=WAL` and `busy_timeout` are set on every connection.
+- `PRAGMA foreign_keys=ON`, `journal_mode=WAL`, `synchronous=NORMAL` and `busy_timeout=5000` are
+  set on every connection.
+- `status` has a database CHECK constraint; `(document_id, ordinal)` is unique; timestamps are
+  stored as UTC and read back timezone-aware.
 - Deleting a document cascades to `chunks`; the delete trigger removes the FTS rows. Tests will
   assert that no `chunks` or FTS rows survive a delete.
 - Chunks for a document are written in **one transaction** together with the status change to
@@ -268,7 +278,8 @@ logged.
 |---|---|---|---|
 | GET | `/api/health` | Liveness | 200 |
 | GET | `/api/ready` | DB reachable, FTS5 present, storage writable | 200 / 503 |
-| GET | `/api/config` | Public client config: limits, allowed types, `llm_enabled` (never secrets) | 200 |
+| GET | `/api/config` | Public client config: limits, allowed types, `llm_enabled` (never secrets or the provider URL) | 200 |
+| GET | `/api/docs`, `/api/openapi.json` | Swagger UI and schema; disable with `DOCUMIND_API_DOCS=false` | 200 |
 | GET | `/api/documents?q=&status=` | List / filter library by name and status | 200 |
 | POST | `/api/documents` | Upload one file (multipart field `file`) | 202, 409, 413, 415, 422 |
 | GET | `/api/documents/{id}` | Document detail and status | 200, 404 |
@@ -293,7 +304,10 @@ Environment variables (prefix `DOCUMIND_`), all with safe defaults; `.env.exampl
 | `DOCUMIND_LLM_BASE_URL` | `https://api.openai.com/v1` | Any OpenAI-compatible endpoint, e.g. `http://localhost:11434/v1` for Ollama |
 | `DOCUMIND_LLM_API_KEY` | *(unset)* | Optional (local servers often need none). Read only on the server; never logged or returned |
 | `DOCUMIND_LLM_TIMEOUT_SECONDS` | `30` | |
-| `DOCUMIND_LOG_LEVEL` | `INFO` | |
+| `DOCUMIND_MAX_CONCURRENT_PROCESSING` | `2` | Documents processed at once |
+| `DOCUMIND_MAX_QUERY_CHARS` / `DOCUMIND_MAX_QUESTION_CHARS` | `300` / `1000` | |
+| `DOCUMIND_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+| `DOCUMIND_API_DOCS` | `true` | Serve Swagger UI at `/api/docs` |
 
 ## 12. Security controls (summary)
 
@@ -305,8 +319,14 @@ Verified in Phase 9 and reported in `docs/REVIEW.md`.
 - SQLAlchemy parameter binding; FTS query terms quoted by the application.
 - Uniform error responses with no stack traces; request IDs for correlation.
 - Logs contain IDs, sizes, durations and error codes — not document text, questions or keys.
-- Security headers on all responses (`X-Content-Type-Options`, `Referrer-Policy`, a CSP for the SPA,
-  `frame-ancestors 'none'`).
+- Security headers on all responses: `X-Content-Type-Options: nosniff`, `Referrer-Policy:
+  no-referrer`, `X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy`, `Permissions-Policy`, and a
+  path-specific CSP — `default-src 'none'` plus `Cache-Control: no-store` for `/api/*`, a relaxed
+  policy only for the Swagger UI page (it loads assets from jsDelivr), and a `'self'` policy for the
+  SPA. Unhandled errors are converted to the JSON envelope inside the same middleware, so 500
+  responses carry these headers and the request ID too.
+- Access log lines contain method, path, status and duration — never the query string; Uvicorn's
+  own access log (which includes query strings) is raised to WARNING.
 - In development the Angular dev server proxies `/api`, so no CORS is enabled.
 - API key only in server environment; the frontend only learns `llm_enabled: true/false`.
 

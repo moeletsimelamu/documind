@@ -8,7 +8,7 @@ report in `docs/phase-reports/`.
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Discovery and architecture | Done |
-| 2 | Backend foundation | Not started |
+| 2 | Backend foundation | Done |
 | 3 | Ingestion and indexing | Not started |
 | 4 | Search and retrieval | Not started |
 | 5 | Frontend and design | Not started |
@@ -86,6 +86,8 @@ commands are executed as written.
 | D8 | PDF chunks never span pages | Every citation has exactly one page number. |
 | D9 | Single-user, no auth, bind to localhost | Brief allows it; no false privacy claims. |
 | D10 | OpenAI-compatible chat API as the optional provider, via httpx behind an interface | Owner's choice (2026-10-25). Covers OpenAI and local servers (Ollama, LM Studio). |
+| D13 | httpx2 instead of httpx | Starlette 1.10 (via FastAPI 0.162) deprecates httpx for its test client; httpx2 is the maintained successor. |
+| D14 | `requires-python >=3.12`, constraints file for transitive pins | Lets reviewers on 3.12/3.13 install; CI must prove it (Phase 8). |
 | D12 | Commits use `Moeletsi Melamu <moeletsimelamu03@gmail.com>`, set in the repo's local config | Owner's choice (2026-10-25). |
 | D11 | Single container: FastAPI serves the built SPA | One process to run; same-origin, no CORS. |
 
