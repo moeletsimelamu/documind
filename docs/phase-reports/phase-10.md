@@ -27,7 +27,7 @@ Date: 2026-10-26.
 | Demo document command in DEMO.md | Run as written; produced the five files. |
 | Backend `pytest` / ruff / format / mypy | **293 passed, 3 skipped** (POSIX-only memory-limit tests); clean |
 | Frontend Prettier / unit tests / end to end | clean; **62 passed**; **14 passed** (8 workflows + 6 accessibility audits) |
-| Container image in CI | see below |
+| Container image in CI | [run 40312172099](https://github.com/moeletsimelamu/documind/actions/runs/40312172099) on `5b2c35f`: **all five jobs passed**, including *Container image · build and smoke test* — the image built, the uid/`/data`/`.env` assertions held, and the smoke test passed against the running container. (The job's step logs need a GitHub sign-in and were not read; a failed step would have failed the job.) |
 
 ## Not verified
 

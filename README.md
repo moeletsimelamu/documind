@@ -99,7 +99,7 @@ only the model name. Everything else works without it.
 | Frontend — Vitest | Services and components, driven through the DOM | 62 passed |
 | End to end — Playwright | 8 complete workflows against the production build, and an axe accessibility audit of 6 page states | 14 passed, 0 accessibility violations |
 | Retrieval evaluation | 30 questions over fictional documents | hit@5: 100% for keyword questions, 56% for paraphrases ([ARCHITECTURE.md §7](docs/ARCHITECTURE.md#evaluation)) |
-| Container | Build; non-root user; no data or `.env` file in the image; upload → search → Ask → delete in the running container | run in CI only |
+| Container | Build; non-root user; no data or `.env` file in the image; upload → search → Ask → delete in the running container | passed in CI ([run 40312172099](https://github.com/moeletsimelamu/documind/actions/runs/40312172099)); not run locally |
 
 ```bash
 cd backend
