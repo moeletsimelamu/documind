@@ -5,6 +5,7 @@ import re
 import time
 import uuid
 from http import HTTPStatus
+from urllib.parse import urlsplit
 
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.exceptions import HTTPException
@@ -161,3 +162,78 @@ class UploadSizeLimitMiddleware:
             return message
 
         await self.app(scope, counting_receive, send)
+
+
+_UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _host_name(host_header: str) -> str:
+    """'localhost:8000' -> 'localhost', '[::1]:8000' -> '[::1]'."""
+    host = host_header.strip().lower()
+    if host.startswith("["):
+        return host.split("]", 1)[0] + "]"
+    return host.rsplit(":", 1)[0] if host.count(":") == 1 else host
+
+
+class HostAndOriginGuardMiddleware:
+    """Protects a server that runs on the user's own machine from other websites.
+
+    - DNS rebinding: a hostile domain can re-point itself to 127.0.0.1 and then read this API as
+      if it were same-origin. Requests are therefore only served for configured host names.
+    - Cross-site requests: a page on another site can make the browser send a form POST here
+      without any preflight (multipart/form-data is a "simple" request), for example to plant a
+      document. Unsafe methods are rejected when the browser reports a different origin.
+      Requests without these headers (curl, scripts) are not browser cross-site requests.
+    """
+
+    def __init__(self, app: ASGIApp, *, allowed_hosts: list[str]) -> None:
+        self.app = app
+        self.allow_any_host = "*" in allowed_hosts
+        self.allowed_hosts = {h.strip().lower() for h in allowed_hosts}
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        headers = Headers(scope=scope)
+        host = headers.get("host", "")
+        if not self.allow_any_host and _host_name(host) not in self.allowed_hosts:
+            await self._reject(
+                scope,
+                receive,
+                send,
+                HTTPStatus.BAD_REQUEST,
+                "invalid_host",
+                "This server does not answer for that host name.",
+            )
+            return
+        if scope["method"] in _UNSAFE_METHODS and self._is_cross_site(headers, host):
+            await self._reject(
+                scope,
+                receive,
+                send,
+                HTTPStatus.FORBIDDEN,
+                "cross_origin_request",
+                "Requests from other websites are not allowed.",
+            )
+            return
+        await self.app(scope, receive, send)
+
+    @staticmethod
+    def _is_cross_site(headers: Headers, host: str) -> bool:
+        fetch_site = headers.get("sec-fetch-site")
+        if fetch_site is not None and fetch_site not in ("same-origin", "none"):
+            return True
+        origin = headers.get("origin")
+        if origin is None:
+            return False
+        if origin == "null":  # sandboxed frames, file:// pages
+            return True
+        return urlsplit(origin).netloc.lower() != host.strip().lower()
+
+    @staticmethod
+    async def _reject(
+        scope: Scope, receive: Receive, send: Send, status: int, code: str, message: str
+    ) -> None:
+        response = error_response(Request(scope), status, code, message)
+        await response(scope, receive, send)

@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     max_extracted_chars: int = Field(default=2_000_000, ge=1_000)
     max_concurrent_processing: int = Field(default=2, ge=1, le=8)
     extraction_timeout_seconds: float = Field(default=120.0, gt=0, le=3600)
+    # Address-space limit for the extraction process (Linux/macOS only; Windows has no equivalent).
+    extraction_memory_limit_mb: int = Field(default=1024, ge=256, le=65536)
     max_query_chars: int = Field(default=300, ge=10, le=2000)
     max_question_chars: int = Field(default=1000, ge=10, le=4000)
 
@@ -38,6 +40,10 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr | None = None
     llm_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
     llm_max_output_tokens: int = Field(default=700, ge=50, le=4000)
+
+    # Host names this server answers for (protects against DNS rebinding). Add the public name
+    # when the app is served under one, e.g. ["documind.example.org"]; "*" disables the check.
+    allowed_hosts: list[str] = Field(default_factory=lambda: ["localhost", "127.0.0.1", "[::1]"])
 
     # Operations
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"

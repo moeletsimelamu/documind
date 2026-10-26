@@ -11,7 +11,9 @@ from documind.main import create_app
 
 
 def make_settings(data_dir: Path, **overrides: Any) -> Settings:
-    # _env_file=None: tests must not pick up a developer's local .env file.
+    # _env_file=None: tests must not pick up a developer's local .env file. The test client sends
+    # "Host: testserver".
+    overrides.setdefault("allowed_hosts", ["localhost", "127.0.0.1", "testserver"])
     return Settings(_env_file=None, data_dir=data_dir, **overrides)
 
 

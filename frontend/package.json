@@ -28,6 +28,7 @@
     "@angular/build": "21.2.28",
     "@angular/cli": "21.2.28",
     "@angular/compiler-cli": "21.2.25",
+    "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.64.0",
     "jsdom": "28.1.0",
     "prettier": "3.9.10",
@@ -35,6 +36,9 @@
     "vitest": "4.1.12"
   },
   "overrides": {
-    "vite": "7.3.7"
+    "vite": "7.3.7",
+    "@angular/build": {
+      "undici": "7.30.1"
+    }
   }
 }

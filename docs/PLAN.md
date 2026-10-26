@@ -15,7 +15,7 @@ report in `docs/phase-reports/`.
 | 6 | Optional AI answers | Done |
 | 7 | Integration hardening | Done |
 | 8 | Automated testing and CI | Workflow written and rehearsed from a clean clone; **first GitHub run pending** (no remote yet) |
-| 9 | Security, accessibility, review | Not started |
+| 9 | Security, accessibility, review | Done — see REVIEW.md |
 | 10 | Packaging and presentation | Not started |
 
 ## Phases and completion criteria
@@ -104,6 +104,10 @@ commands are executed as written.
 | D28 | FastAPI serves the built SPA (moved forward from Phase 10) | One process to run and test end to end; the SPA's security policy is exercised for real. |
 | D29 | Angular critical-CSS inlining off | Its inline `onload` handler is blocked by the CSP; found before it shipped. |
 | D30 | Playwright end-to-end suite (Chromium only) | Proportionate: 8 workflow tests in ~13 s prove the frontend and backend work together, repeatably in CI. |
+| D31 | Host allow-list + cross-site write refusal | Live probes showed DNS-rebinding reads and cross-site uploads worked. |
+| D32 | Async capacity limiter for queued processing | 120-upload burst stalled the API for 26 s; now worst 322 ms. |
+| D33 | `RLIMIT_AS` on the extraction process (POSIX) | Decompression bombs; no portable Windows equivalent, documented. |
+| D34 | axe-core audit in the end-to-end suite | Automated WCAG A/AA rules on every page, in CI. |
 | D12 | Commits use `Moeletsi Melamu <moeletsimelamu03@gmail.com>`, set in the repo's local config | Owner's choice (2026-10-25). |
 | D11 | Single container: FastAPI serves the built SPA | One process to run; same-origin, no CORS. |
 

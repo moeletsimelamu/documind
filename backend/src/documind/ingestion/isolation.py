@@ -7,6 +7,7 @@ terminated and the document is marked as failed.
 
 import logging
 import multiprocessing
+import sys
 from collections.abc import Callable
 from multiprocessing.connection import Connection, wait
 from typing import Any
@@ -22,9 +23,30 @@ class IsolationCrashError(Exception):
     pass
 
 
-def _child_main(connection: Connection, func: Callable[[Any], Any], arg: Any) -> None:
+def memory_limit_supported() -> bool:
+    """Per-process memory limits need POSIX ``setrlimit`` (Linux, macOS); Windows has none."""
+    return sys.platform != "win32"
+
+
+def _limit_memory(limit_bytes: int) -> None:
+    if sys.platform != "win32":
+        import resource
+
+        resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
+
+
+def _child_main(
+    connection: Connection,
+    func: Callable[[Any], Any],
+    arg: Any,
+    memory_limit_bytes: int | None,
+) -> None:
     # Parser warnings are noise here and can be numerous for damaged files.
     logging.getLogger("pypdf").setLevel(logging.ERROR)
+    if memory_limit_bytes is not None and memory_limit_supported():
+        # Allocations beyond the limit raise MemoryError here instead of exhausting the machine
+        # (e.g. a PDF with a decompression bomb).
+        _limit_memory(memory_limit_bytes)
     try:
         connection.send(("ok", func(arg)))
     except Exception as exc:
@@ -36,8 +58,17 @@ def _child_main(connection: Connection, func: Callable[[Any], Any], arg: Any) ->
         connection.close()
 
 
-def run_isolated[T, R](func: Callable[[T], R], arg: T, timeout: float) -> R:
+def run_isolated[T, R](
+    func: Callable[[T], R],
+    arg: T,
+    timeout: float,
+    *,
+    memory_limit_bytes: int | None = None,
+) -> R:
     """Call ``func(arg)`` in a fresh process. Exceptions raised by ``func`` are re-raised here.
+
+    ``memory_limit_bytes`` caps the process's address space where the platform supports it
+    (``memory_limit_supported()``); allocations beyond it raise MemoryError.
 
     Raises IsolationTimeoutError if no result arrives within ``timeout`` seconds, and
     IsolationCrashError if the process exits without sending one.
@@ -47,7 +78,9 @@ def run_isolated[T, R](func: Callable[[T], R], arg: T, timeout: float) -> R:
     """
     context = multiprocessing.get_context("spawn")
     receiver, sender = context.Pipe(duplex=False)
-    process = context.Process(target=_child_main, args=(sender, func, arg), daemon=True)
+    process = context.Process(
+        target=_child_main, args=(sender, func, arg, memory_limit_bytes), daemon=True
+    )
     process.start()
     sender.close()
     try:

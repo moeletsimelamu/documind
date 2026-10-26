@@ -7,13 +7,14 @@ the ``ready`` status in one transaction, or record a failure the user can read.
 
 import hashlib
 import logging
-import threading
 import time
 import uuid
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import BinaryIO
 
+import anyio
+import anyio.to_thread
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
@@ -179,19 +180,29 @@ class DocumentProcessor:
         self._session_factory = session_factory
         self._storage = storage
         self._settings = settings
-        self._slots = threading.BoundedSemaphore(settings.max_concurrent_processing)
+        self._limiter: anyio.CapacityLimiter | None = None
+
+    async def process_in_background(self, document_id: str) -> None:
+        """Wait for a processing slot without holding a worker thread, then process.
+
+        Queued documents wait on this limiter in the event loop. Waiting inside a worker thread
+        instead would let a burst of uploads occupy the server's shared thread pool, which every
+        API request also needs (measured: health checks took up to 26 s during 120 uploads).
+        """
+        if self._limiter is None:
+            self._limiter = anyio.CapacityLimiter(self._settings.max_concurrent_processing)
+        await anyio.to_thread.run_sync(self.process, document_id, limiter=self._limiter)
 
     def process(self, document_id: str) -> None:
-        with self._slots:
-            try:
-                self._process(document_id)
-            except Exception:
-                logger.exception("Unexpected error while processing document %s", document_id)
-                self._mark_failed(
-                    document_id,
-                    "processing_error",
-                    "The document could not be processed because of an unexpected error.",
-                )
+        try:
+            self._process(document_id)
+        except Exception:
+            logger.exception("Unexpected error while processing document %s", document_id)
+            self._mark_failed(
+                document_id,
+                "processing_error",
+                "The document could not be processed because of an unexpected error.",
+            )
 
     def _process(self, document_id: str) -> None:
         started = time.perf_counter()
@@ -209,7 +220,12 @@ class DocumentProcessor:
         )
         timeout = self._settings.extraction_timeout_seconds
         try:
-            extracted = run_isolated(extract_file, request, timeout)
+            extracted = run_isolated(
+                extract_file,
+                request,
+                timeout,
+                memory_limit_bytes=self._settings.extraction_memory_limit_mb * 1024 * 1024,
+            )
         except ExtractionError as exc:
             self._mark_failed(document_id, exc.code, exc.message)
             return
@@ -219,6 +235,14 @@ class DocumentProcessor:
                 "timeout",
                 f"Reading this file took longer than {timeout:g} seconds and was stopped. "
                 "The file may be damaged or unusually complex.",
+            )
+            return
+        except MemoryError:
+            self._mark_failed(
+                document_id,
+                "too_large",
+                "Reading this file needed more memory than the "
+                f"{self._settings.extraction_memory_limit_mb} MB limit allows.",
             )
             return
         except IsolationCrashError:

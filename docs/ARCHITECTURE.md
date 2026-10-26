@@ -1,6 +1,6 @@
 # DocuMind — Architecture
 
-Status: **Phase 7 complete** — ingestion, keyword search, question answering (retrieval-only, or
+Status: **Phase 9 complete** (review in REVIEW.md) — ingestion, keyword search, question answering (retrieval-only, or
 grounded answers from an optional OpenAI-compatible model) and the Angular frontend are built and
 tested, including end-to-end tests against the production build. Later phases add CI, a review
 and packaging.
@@ -170,7 +170,10 @@ chunks_fts  — FTS5 external-content table over chunks.text
 5. **Store and record.** The temporary file is renamed to `<uuid>.<ext>`; the document is
    committed as `processing` and returned with `202`. Processing is queued as a background task.
 
-**In the background** (`DocumentProcessor.process`; at most `MAX_CONCURRENT_PROCESSING` = 2 at once):
+**In the background** (`DocumentProcessor.process_in_background`; at most
+`MAX_CONCURRENT_PROCESSING` = 2 at once). Queued documents wait on an async capacity limiter,
+not in a worker thread, so a burst of uploads cannot occupy the thread pool that API requests
+need (REVIEW.md R3):
 
 6. **Extract in an isolated process** (`isolation.run_isolated`, `spawn` start method) with a hard
    time limit (`EXTRACTION_TIMEOUT_SECONDS`, 120). The worker receives the stored file's *path*,
@@ -397,6 +400,8 @@ Environment variables (prefix `DOCUMIND_`), all with safe defaults; `.env.exampl
 | `DOCUMIND_LLM_MAX_OUTPUT_TOKENS` | `700` | Upper bound on the answer length |
 | `DOCUMIND_MAX_CONCURRENT_PROCESSING` | `2` | Documents processed at once |
 | `DOCUMIND_EXTRACTION_TIMEOUT_SECONDS` | `120` | Hard limit for reading one file |
+| `DOCUMIND_EXTRACTION_MEMORY_LIMIT_MB` | `1024` | Address-space limit for the extraction process (Linux/macOS; ignored on Windows) |
+| `DOCUMIND_ALLOWED_HOSTS` | `["localhost", "127.0.0.1", "[::1]"]` | JSON list of host names the server answers for; `["*"]` disables the check |
 | `DOCUMIND_MAX_QUERY_CHARS` / `DOCUMIND_MAX_QUESTION_CHARS` | `300` / `1000` | |
 | `DOCUMIND_LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
 | `DOCUMIND_API_DOCS` | `true` | Serve Swagger UI at `/api/docs` |
@@ -414,6 +419,11 @@ Verified in Phase 9 and reported in `docs/REVIEW.md`.
   `Content-Disposition: attachment` with `nosniff`.
 - SQLAlchemy parameter binding; FTS query terms quoted by the application.
 - Uniform error responses with no stack traces; request IDs for correlation.
+- **Other websites** (the server runs on the user's machine, reachable from any page in their
+  browser): requests are served only for `DOCUMIND_ALLOWED_HOSTS` (DNS-rebinding defence), and
+  POST/PUT/PATCH/DELETE requests whose `Origin` or `Sec-Fetch-Site` reveals another site are
+  refused with 403. No CORS headers are sent, so other sites cannot read responses either.
+- Extraction process memory capped with `RLIMIT_AS` where the platform supports it.
 - Logs contain IDs, sizes, durations and error codes — not document text, questions or keys.
 - Security headers on all responses: `X-Content-Type-Options: nosniff`, `Referrer-Policy:
   no-referrer`, `X-Frame-Options: DENY`, `Cross-Origin-Opener-Policy`, `Permissions-Policy`, and a

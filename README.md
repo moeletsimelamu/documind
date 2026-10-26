@@ -28,7 +28,9 @@ The API listens on `http://127.0.0.1:8000`; interactive API docs are at `/api/do
 written to `backend/data/` (git-ignored). Settings are listed in [.env.example](.env.example).
 
 DocuMind has no user accounts: anyone who can reach the server can read and delete every
-document. Keep it bound to localhost unless you put authentication in front of it.
+document. Keep it bound to localhost unless you put authentication in front of it. Other
+websites open in your browser cannot use it: the server only answers for local host names and
+refuses cross-site write requests (see [docs/REVIEW.md](docs/REVIEW.md)).
 
 ## Running the frontend (development)
 

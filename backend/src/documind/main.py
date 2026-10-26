@@ -18,7 +18,11 @@ from documind.db import create_db_engine, create_session_factory, init_schema
 from documind.errors import register_error_handlers
 from documind.ingestion.pipeline import DocumentProcessor, too_large_message
 from documind.logging_setup import configure_logging
-from documind.middleware import RequestContextMiddleware, UploadSizeLimitMiddleware
+from documind.middleware import (
+    HostAndOriginGuardMiddleware,
+    RequestContextMiddleware,
+    UploadSizeLimitMiddleware,
+)
 from documind.spa import register_spa
 from documind.storage import LocalFileStorage
 
@@ -88,6 +92,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         max_file_bytes=settings.max_upload_bytes,
         message=too_large_message(settings),
     )
+    # Before reading any body: refuse unknown hosts and cross-site writes.
+    app.add_middleware(HostAndOriginGuardMiddleware, allowed_hosts=settings.allowed_hosts)
     app.add_middleware(RequestContextMiddleware)
     app.include_router(health.router, prefix="/api")
     app.include_router(documents.router, prefix="/api")

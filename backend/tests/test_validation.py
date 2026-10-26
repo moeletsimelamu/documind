@@ -20,6 +20,7 @@ from documind.ingestion.validation import (
         ("..\\..\\Windows\\system.ini.txt", "system.ini.txt"),
         ("C:\\Users\\me\\Documents\\notes.txt", "notes.txt"),
         ("quarterly\x00report.pdf", "quarterlyreport.pdf"),
+        ("report\r\nSet-Cookie: x.txt", "reportSet-Cookie: x.txt"),  # no line breaks in headers
         ("invoice\u202efdp.exe", "invoicefdp.exe"),  # right-to-left override removed
         ("  spaced    out   name.txt  ", "spaced out name.txt"),
         ("Cafe\u0301 menu.txt", "Café menu.txt"),  # normalised to NFC

@@ -27,3 +27,8 @@ class CrashesWhenUnpickled:
 
     def __reduce__(self) -> tuple[object, tuple[int]]:
         return (os._exit, (7,))
+
+
+def allocate_megabytes(megabytes: int) -> int:
+    block = bytearray(megabytes * 1024 * 1024)
+    return len(block)

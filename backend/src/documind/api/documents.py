@@ -74,7 +74,7 @@ def upload_document(
         filename=file.filename,
         source=file.file,
     )
-    background.add_task(processor.process, document.id)
+    background.add_task(processor.process_in_background, document.id)
     return document
 
 

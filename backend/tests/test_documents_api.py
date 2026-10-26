@@ -497,3 +497,18 @@ def test_restart_fails_interrupted_documents_and_removes_orphaned_files(tmp_path
             "someone-elses-file.md",
         ]
     )
+
+
+def test_running_out_of_memory_while_reading_is_reported_as_too_large(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def out_of_memory(*_: object, **__: object) -> object:
+        raise MemoryError
+
+    monkeypatch.setattr(pipeline, "run_isolated", out_of_memory)
+
+    document = uploaded(client, "bomb.pdf", make_pdf([paragraph("x")]))
+
+    assert document["status"] == "failed"
+    assert document["failure_code"] == "too_large"
+    assert "1024 MB limit" in document["failure_message"]

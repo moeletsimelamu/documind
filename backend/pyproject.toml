@@ -11,6 +11,7 @@ authors = [{ name = "Moeletsi Melamu" }]
 # Direct dependencies are pinned exactly. Transitive versions are pinned in constraints.txt.
 dependencies = [
     "fastapi==0.162.0",
+    "anyio==4.15.1",
     "uvicorn==0.54.0",
     "pydantic==2.14.1",
     "pydantic-settings==2.16.1",
