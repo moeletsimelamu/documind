@@ -1,9 +1,9 @@
 # DocuMind — Architecture
 
-Status: **Phase 9 complete** (review in REVIEW.md) — ingestion, keyword search, question answering (retrieval-only, or
-grounded answers from an optional OpenAI-compatible model) and the Angular frontend are built and
-tested, including end-to-end tests against the production build. Later phases add CI, a review
-and packaging.
+Status: **all ten phases complete** — ingestion, keyword search, question answering
+(retrieval-only, or grounded answers from an optional OpenAI-compatible model) and the Angular
+frontend are built and tested, including end-to-end tests against the production build; CI runs
+on GitHub; the security review is in REVIEW.md; the app ships as one container image (§15).
 
 ## 1. Scope and trust model
 
@@ -72,33 +72,33 @@ Windows** with `pip install --dry-run --only-binary=:all:` before being chosen.
 FastAPI 0.162 brings Starlette 1.10. Direct backend dependencies are pinned exactly in
 `backend/pyproject.toml`; every resolved package (38, including transitive ones) is pinned in
 `backend/constraints.txt`, installed with `pip install -c constraints.txt -e ".[dev]"`.
-`requires-python` is `>=3.12`; so far it is tested only on 3.14 — CI adds 3.12 in Phase 8.
+`requires-python` is `>=3.12`; CI tests on 3.12 and 3.14, development uses 3.14.
 
 ## 4. Repository layout
-
-Files marked † exist; the rest are planned.
 
 ```
 DocuMind/
 ├─ backend/
-│  ├─ pyproject.toml †, constraints.txt †
+│  ├─ pyproject.toml, constraints.txt
 │  ├─ src/documind/
-│  │  ├─ main.py †          app factory; SPA static mount (prod) planned
-│  │  ├─ config.py †        Settings (env vars, limits)
-│  │  ├─ logging_setup.py † log format with request IDs
-│  │  ├─ middleware.py †    request IDs, access log, security headers, unhandled errors
-│  │  ├─ errors.py †        AppError hierarchy → JSON error responses
-│  │  ├─ db.py †            engine, PRAGMAs, schema init incl. FTS5 + triggers
-│  │  ├─ models.py †        Document, Chunk ORM models, schema_meta
-│  │  ├─ schemas.py †       Pydantic API models
-│  │  ├─ storage.py †       LocalFileStorage: generated names, containment check, orphan sweep
-│  │  ├─ api/ †             deps.py, health.py, documents.py, search.py, ask.py
-│  │  ├─ ingestion/ †       validation.py, extraction.py, isolation.py, chunking.py, pipeline.py
-│  │  ├─ retrieval.py †     query parsing, FTS5 search, highlights, excerpts
-│  │  └─ answering/ †       provider.py, openai_compatible.py, prompt.py, service.py
-│  └─ tests/ †              unit + API tests; pdf_factory.py generates test PDFs; eval/ dataset
-├─ frontend/ †              Angular 21 workspace (see §14)
-├─ docs/                    ARCHITECTURE, DESIGN, PLAN, REVIEW, DEPLOYMENT, phase-reports/
+│  │  ├─ main.py            app factory, middleware, routers
+│  │  ├─ config.py          Settings (env vars, limits)
+│  │  ├─ logging_setup.py   log format with request IDs
+│  │  ├─ middleware.py      request IDs, access log, security headers, host/origin guard, upload size
+│  │  ├─ errors.py          AppError hierarchy → JSON error responses
+│  │  ├─ db.py              engine, PRAGMAs, schema init incl. FTS5 + triggers
+│  │  ├─ models.py          Document, Chunk ORM models, schema_meta
+│  │  ├─ schemas.py         Pydantic API models
+│  │  ├─ storage.py         LocalFileStorage: generated names, containment check, orphan sweep
+│  │  ├─ spa.py             serves the built frontend (production)
+│  │  ├─ api/               deps.py, health.py, documents.py, search.py, ask.py
+│  │  ├─ ingestion/         validation.py, extraction.py, isolation.py, chunking.py, pipeline.py
+│  │  ├─ retrieval.py       query parsing, FTS5 search, highlights, excerpts
+│  │  └─ answering/         provider.py, openai_compatible.py, prompt.py, service.py
+│  └─ tests/               unit + API tests; pdf_factory.py generates test PDFs; eval/ dataset
+├─ frontend/               Angular 21 workspace (see §14); e2e/ Playwright suite; scripts/ screenshots
+├─ docs/                    ARCHITECTURE, DESIGN, PLAN, REVIEW, DEPLOYMENT, DEMO, phase-reports/, screenshots/
+├─ scripts/smoke-test.sh    checks a running instance (used on the container in CI)
 ├─ .github/workflows/ci.yml
 ├─ Dockerfile, .dockerignore, .env.example
 └─ README.md
@@ -456,8 +456,8 @@ Verified in Phase 9 and reported in `docs/REVIEW.md`.
   re-enabling the inline stylesheet loader: the suite failed).
 - **Manual browser checks** for layout, keyboard use and responsiveness are recorded in the phase
   reports.
-- **CI:** GitHub Actions — ruff, mypy, pytest; prettier, unit tests, build; end-to-end; Docker image
-  build *(planned, Phase 8)*.
+- **CI:** GitHub Actions — ruff, mypy, pytest (Python 3.12 and 3.14); prettier, unit tests,
+  build; end-to-end; container image build, hygiene checks and smoke test (§15).
 
 ## 14. Frontend
 
@@ -498,3 +498,24 @@ src/app/
 - **Dependency note:** npm 10.9 crashes (`Cannot read properties of null (reading 'edgesOut')`)
   resolving the optional peer dependencies of the newest Vite through Vitest. `package.json`
   therefore overrides `vite` to 7.3.7, the exact version `@angular/build` 21.2.28 pins.
+
+## 15. Packaging
+
+One multi-stage `Dockerfile` at the repository root:
+
+1. **frontend** stage (`node:22.14.0-bookworm-slim`): `npm ci` from the lock file, production build.
+2. **runtime** stage (`python:3.14.9-slim-trixie`): installs the backend with
+   `pip install -c constraints.txt .` (the same pins as development and CI), removes the source
+   tree, copies in the built frontend at `/app/static`.
+
+The container runs `uvicorn documind.main:create_app --factory` as an unprivileged user
+(uid 10001) on port 8000, with data in the `/data` volume, Swagger UI off and a `HEALTHCHECK`
+against `/api/ready`. Nothing configurable is baked in: AI settings and limits come from the
+environment at run time. `.dockerignore` keeps `.env*` files, data, databases, tests,
+`node_modules` and `.git` out of the build context.
+
+CI builds the image on every push, asserts the uid, an empty `/data` and the absence of any `.env*`
+file, runs the container and executes `scripts/smoke-test.sh` against it (readiness, app shell,
+Swagger off, foreign `Host` refused, upload → isolated processing → search → Ask → delete). Docker
+is not installed on the development machine, so CI is the only place the image has been built and
+run. Running it is described in DEPLOYMENT.md.

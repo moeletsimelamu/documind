@@ -14,9 +14,9 @@ report in `docs/phase-reports/`.
 | 5 | Frontend and design | Done |
 | 6 | Optional AI answers | Done |
 | 7 | Integration hardening | Done |
-| 8 | Automated testing and CI | Running on GitHub, all jobs green; failing-check demonstration pending a pull request |
+| 8 | Automated testing and CI | Done — green on GitHub; failure demonstrated on a throwaway branch |
 | 9 | Security, accessibility, review | Done — see REVIEW.md |
-| 10 | Packaging and presentation | Not started |
+| 10 | Packaging and presentation | Done — image built and smoke-tested in CI; no public deployment |
 
 ## Phases and completion criteria
 
@@ -110,6 +110,10 @@ commands are executed as written.
 | D34 | axe-core audit in the end-to-end suite | Automated WCAG A/AA rules on every page, in CI. |
 | D12 | Commits use `Moeletsi Melamu <moeletsimelamu03@gmail.com>`, set in the repo's local config | Owner's choice (2026-10-25). |
 | D11 | Single container: FastAPI serves the built SPA | One process to run; same-origin, no CORS. |
+| D35 | Runtime image `python:3.14.9-slim-trixie`, frontend built with `node:22.14.0-bookworm-slim` | Same Python and Node versions as development; slim Debian base with glibc wheels. |
+| D36 | Image verified by a CI job (build, hygiene assertions, `scripts/smoke-test.sh` on the running container) | Docker is not installed on the development machine; the job makes the image claims checkable on every push. |
+| D37 | Screenshots captured by a script against the real app with fictional documents | Repeatable, no personal data, nothing mocked; AI answers off, so no generated answer is shown. |
+| D38 | No public deployment | No authentication; publishing a document store openly would contradict the single-user trust model. Requirements for exposing it are in DEPLOYMENT.md §5. |
 
 ## Open items
 
