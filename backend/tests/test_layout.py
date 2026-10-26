@@ -1,6 +1,6 @@
 from documind.ingestion.extraction import extract_bytes
 from documind.ingestion.layout import clean_pdf_pages
-from tests.pdf_factory import make_pdf
+from tests.pdf_factory import make_pdf, paragraph
 
 TOPICS = ["leave", "expenses", "equipment", "conduct", "training", "travel", "payroll", "benefits"]
 
@@ -29,6 +29,17 @@ def test_running_headers_footers_and_page_numbers_are_removed() -> None:
         assert "Version 4" not in text
         assert "Page" not in text
         assert text.startswith("Employees with a question") and text.endswith("Operations.")
+
+
+def test_pages_from_a_template_that_differ_only_in_numbers_keep_their_text() -> None:
+    # Every line repeats on every page except for its numbers ("Sentence 3 … topic 17 …"),
+    # like statements or generated reports. Found failing in CI, where the 200-page memory-limit
+    # test runs: the whole document was stripped as "running headers".
+    pages = [paragraph(f"topic {n}", 12) for n in range(40)]
+
+    cleaned = clean_pdf_pages(pages)
+
+    assert [text.split() for text in cleaned] == [text.split() for text in pages]
 
 
 def test_a_line_on_only_a_few_pages_is_not_a_running_header() -> None:
