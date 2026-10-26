@@ -74,6 +74,7 @@ import { Icon } from './icon';
       [highlights]="hit().highlights"
       [startsMidText]="hit().excerpt_starts_mid_text"
       [endsMidText]="hit().excerpt_ends_mid_text"
+      [reference]="reference()"
     />
     <a
       class="open"
@@ -91,6 +92,8 @@ export class PassageCard {
   readonly hit = input.required<SearchHit>();
   /** e.g. "S1" when the passage is a numbered source. */
   readonly label = input<string | null>(null);
+  /** The answer that cites this passage, if any; its supporting sentence is highlighted. */
+  readonly reference = input<string | null>(null);
 
   protected readonly where = computed(() => locationLabel(this.hit()));
 }

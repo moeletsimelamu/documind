@@ -104,7 +104,9 @@ test('searches from the top bar and opens a result at its passage', async ({ pag
   const result = page.locator('dm-passage-card').first();
   await expect(result).toContainText('falcon-steering-minutes.pdf');
   await expect(result).toContainText('p. 2');
-  await expect(result.locator('mark').first()).toHaveText('Lumen');
+  // The best-matching sentence is highlighted; matched words are underlined (or marked, in a
+  // one-sentence excerpt).
+  await expect(result.locator('.term, mark:not(.best)').first()).toHaveText('Lumen');
 
   await result.getByRole('link', { name: /at this passage/ }).click();
 
@@ -137,17 +139,22 @@ test('answers with relevant passages, or says the documents do not contain the a
   await question.fill('What budget did the committee approve for Project Falcon?');
   await question.press('Enter');
 
-  const answered = page.locator('.entry').first();
+  const answered = page.locator('.entry').last();
   await expect(answered.locator('.response-label')).toContainText('Relevant passages');
-  await expect(answered.locator('dm-passage-card').first()).toContainText('R4.5 million');
+  await expect(answered.locator('.closest blockquote')).toContainText('R4.5 million');
+  // Wide screen: the sources of the active question are in the panel beside the thread.
+  await expect(page.locator('.sources-panel dm-passage-card').first()).toContainText(
+    'R4.5 million',
+  );
   await expect(question).toHaveValue('');
 
   await question.fill('Who won the rugby world cup?');
   await question.press('Enter');
 
-  await expect(page.locator('.entry').first()).toContainText(
+  await expect(page.locator('.entry').last()).toContainText(
     'Not enough in your documents to answer this',
   );
+  await expect(page.locator('.entry').first()).toContainText('Relevant passages');
 });
 
 test('deletes a document after confirmation, and it disappears from search', async ({ page }) => {

@@ -23,7 +23,7 @@ export class AskSessionService {
   private readonly api = inject(ApiService);
   private nextId = 1;
 
-  /** Newest first. */
+  /** In the order asked, like a conversation: the latest question is last. */
   readonly entries = signal<AskEntry[]>([]);
   readonly busy = computed(() => this.entries().some((e) => e.state === 'loading'));
 
@@ -40,7 +40,7 @@ export class AskSessionService {
       response: null,
       error: null,
     };
-    this.entries.update((entries) => [entry, ...entries]);
+    this.entries.update((entries) => [...entries, entry]);
     this.send(entry);
   }
 

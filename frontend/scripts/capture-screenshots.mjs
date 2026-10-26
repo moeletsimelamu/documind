@@ -73,7 +73,7 @@ await shoot('ask', tall, async (page) => {
   const question = page.getByLabel('Your question');
   await question.fill('How many days of paid vacation do full-time staff get?');
   await question.press('Enter');
-  await page.locator('.entry dm-passage-card').first().waitFor();
+  await page.locator('.sources-panel dm-passage-card').first().waitFor();
   await page.evaluate(() => window.scrollTo(0, 0));
 });
 

@@ -79,7 +79,7 @@ test('ask with a response', async ({ page }) => {
   await page.goto('/ask');
   await page.getByLabel('Your question').fill('What did the warehouse audit find?');
   await page.getByLabel('Your question').press('Enter');
-  await expect(page.locator('.entry dm-passage-card').first()).toBeVisible();
+  await expect(page.locator('.sources-panel dm-passage-card').first()).toBeVisible();
   await audit(page);
 });
 

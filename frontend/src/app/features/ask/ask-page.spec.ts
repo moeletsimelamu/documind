@@ -179,9 +179,9 @@ describe('AskPage', () => {
       }),
     );
 
-    const chips = Array.from(page.querySelectorAll<HTMLButtonElement>('.answer-sources .marker'));
+    const chips = Array.from(page.querySelectorAll<HTMLButtonElement>('.answer .chips .marker'));
     expect(chips.map((chip) => chip.textContent)).toEqual(['S2']);
-    expect(page.querySelector('.answer-sources')?.textContent).toContain('Based on');
+    expect(page.querySelector('.answer .chips')?.textContent).toContain('Based on');
 
     chips[0].click();
     await fixture.whenStable();
@@ -252,5 +252,109 @@ describe('AskPage', () => {
     expect(page.querySelector('.closest-heading')?.textContent).toContain('Closest passages');
     expect(page.querySelectorAll('dm-passage-card')).toHaveLength(1);
     expect(page.querySelector('.answer')).toBeNull();
+  });
+
+  it('leads a passages-only reply with the closest sentence, quoted and attributed', async () => {
+    const excerpt =
+      'The committee met on 3 March. It approved a budget of R4.5 million for Project Falcon. ' +
+      'The next meeting is in April.';
+    await askAndAnswer(
+      makeAskResponse({
+        passages: [
+          makeHit({
+            chunk_id: 1,
+            document_name: 'minutes.pdf',
+            page: 2,
+            excerpt,
+            highlights: [
+              [44, 50],
+              [79, 85],
+            ],
+          }),
+          makeHit({ chunk_id: 2, document_name: 'notes.txt' }),
+        ],
+      }),
+    );
+
+    const closest = page.querySelector('.closest')!;
+    expect(closest.querySelector('blockquote')?.textContent).toBe(
+      'It approved a budget of R4.5 million for Project Falcon.',
+    );
+    expect(closest.textContent).toContain('minutes.pdf');
+    expect(closest.textContent).toContain('p. 2');
+    expect(closest.textContent).toContain('not a generated answer');
+
+    const chips = Array.from(page.querySelectorAll<HTMLButtonElement>('.response .chips .marker'));
+    expect(chips.map((chip) => chip.textContent)).toEqual(['S1', 'S2']);
+    chips[1].click();
+    await fixture.whenStable();
+
+    expect(page.querySelectorAll('.sources li')[1].classList).toContain('selected');
+  });
+
+  it('keeps the thread in the order the questions were asked', async () => {
+    await askAndAnswer(makeAskResponse());
+    await typeQuestion('And the second question?');
+    pressEnter();
+    http.expectOne('/api/ask').flush(makeAskResponse());
+    await fixture.whenStable();
+
+    expect(Array.from(page.querySelectorAll('.question')).map((q) => q.textContent)).toEqual([
+      'What budget was approved?',
+      'And the second question?',
+    ]);
+  });
+
+  describe('on a wide screen', () => {
+    const original = window.matchMedia;
+
+    beforeEach(async () => {
+      window.matchMedia = ((query: string) => ({
+        matches: query.includes('min-width'),
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+      })) as unknown as typeof window.matchMedia;
+      fixture = TestBed.createComponent(AskPage);
+      page = fixture.nativeElement as HTMLElement;
+      await fixture.whenStable();
+    });
+
+    afterEach(() => {
+      window.matchMedia = original;
+    });
+
+    it('shows the sources of the active question in one panel beside the thread', async () => {
+      await askAndAnswer(
+        makeAskResponse({ passages: [makeHit({ chunk_id: 1, document_name: 'first.pdf' })] }),
+      );
+      await typeQuestion('Second question?');
+      pressEnter();
+      http
+        .expectOne('/api/ask')
+        .flush(
+          makeAskResponse({ passages: [makeHit({ chunk_id: 2, document_name: 'second.pdf' })] }),
+        );
+      await fixture.whenStable();
+
+      const panel = () => page.querySelector('.sources-panel.side')!;
+      expect(page.querySelectorAll('.sources-panel')).toHaveLength(1);
+      expect(panel().textContent).toContain('For: Second question?');
+      expect(panel().textContent).toContain('second.pdf');
+      expect(page.querySelectorAll('.entry')[1].classList).toContain('active');
+
+      // The earlier question offers its sources; choosing it switches the panel.
+      const show = page.querySelector<HTMLButtonElement>('.entry .show-sources')!;
+      show.click();
+      await fixture.whenStable();
+
+      expect(panel().textContent).toContain('first.pdf');
+      expect(page.querySelectorAll('.entry')[0].classList).toContain('active');
+    });
+
+    it('shows a placeholder before anything has been asked', () => {
+      expect(page.querySelector('.sources-panel.side')?.textContent).toContain(
+        'The passages behind each answer appear here',
+      );
+    });
   });
 });

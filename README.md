@@ -13,13 +13,15 @@ their contents, and ask questions whose answers always point back to the exact p
   *No text found* with the reason instead of being silently indexed as empty. Duplicates are
   recognised.
 - **Searches it.** Keyword search (SQLite FTS5, BM25 ranking) with stemming, so "delays" also finds
-  "delayed". Results show highlighted excerpts with document and page, and open the document at
-  the passage.
-- **Answers questions with sources.** Without an AI model, an answer is the most relevant passages,
-  numbered S1, S2… With an OpenAI-compatible model configured (hosted, or local such as Ollama),
-  the model writes a short answer from those passages only and cites the ones it used; the server
-  removes any citation it cannot match to a retrieved passage, and each citation opens its source.
-  When the documents do not contain the answer, DocuMind says so.
+  "delayed". Each result shows its document and page, highlights the sentence that best matches,
+  and opens the document at the passage.
+- **Answers questions with sources.** Questions and answers form a thread beside a panel showing
+  the sources of the selected answer. Without an AI model, an answer is the closest sentence,
+  quoted, with the most relevant passages numbered S1, S2… With an OpenAI-compatible model
+  configured (hosted, or local such as Ollama), the model writes a short answer from those passages
+  only and cites the ones it used; the server removes any citation it cannot match to a retrieved
+  passage, and each citation opens its source with the supporting sentence highlighted. When the
+  documents do not contain the answer, DocuMind says so.
 
 | Search | Reader | Ask (no AI model) |
 |---|---|---|
@@ -102,7 +104,7 @@ only the model name. Everything else works without it.
 |---|---|---|
 | Backend — pytest | API, validation, extraction (generated valid, corrupt, encrypted, image-only and fake PDFs), PDF layout clean-up, chunking, search, answer grounding with fake providers, middleware, SPA serving | 304 passed on Windows; 3 more (memory limit) run only on Linux/macOS |
 | Backend — ruff, mypy (strict) | Lint, formatting, types | clean |
-| Frontend — Vitest | Services and components, driven through the DOM | 65 passed |
+| Frontend — Vitest | Services and components, driven through the DOM | 78 passed |
 | End to end — Playwright | 8 complete workflows against the production build, and an axe accessibility audit of 6 page states | 14 passed, 0 accessibility violations |
 | Retrieval evaluation | 30 questions over fictional documents | hit@5: 100% for keyword questions, 56% for paraphrases ([ARCHITECTURE.md §7](docs/ARCHITECTURE.md#evaluation)) |
 | Real documents | Three public PDFs (a 129-page NIST standard, a 76-page HR guide, a two-column research paper), 11 natural questions judged by hand | processed in 1.7–6.4 s each; answer passage in the top 5 for 9 of 11 questions |
