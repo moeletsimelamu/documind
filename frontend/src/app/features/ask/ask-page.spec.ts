@@ -155,6 +155,40 @@ describe('AskPage', () => {
     expect(text()).toContain('sent to the AI provider configured on this server');
   });
 
+  it('says the model is writing while an AI answer is on its way', async () => {
+    TestBed.inject(ConfigService).config.set(makeConfig({ llm_enabled: true, llm_model: 'gpt-x' }));
+    await typeQuestion('What budget was approved?');
+    pressEnter();
+    await fixture.whenStable();
+
+    expect(text()).toContain('Finding passages and asking gpt-x for an answer');
+    http.expectOne('/api/ask');
+  });
+
+  it('offers the cited sources after an answer that has no markers in its text', async () => {
+    await askAndAnswer(
+      makeAskResponse({
+        mode: 'generated',
+        answer: 'The budget is R4.5 million.',
+        cited: ['S2'],
+        model: 'small-model',
+        passages: [
+          makeHit({ chunk_id: 1, document_name: 'notes.txt' }),
+          makeHit({ chunk_id: 2, document_name: 'minutes.pdf' }),
+        ],
+      }),
+    );
+
+    const chips = Array.from(page.querySelectorAll<HTMLButtonElement>('.answer-sources .marker'));
+    expect(chips.map((chip) => chip.textContent)).toEqual(['S2']);
+    expect(page.querySelector('.answer-sources')?.textContent).toContain('Based on');
+
+    chips[0].click();
+    await fixture.whenStable();
+
+    expect(page.querySelectorAll('.sources-panel li')[1].classList).toContain('selected');
+  });
+
   it('shows a generated answer with markers that open the cited sources', async () => {
     await askAndAnswer(
       makeAskResponse({

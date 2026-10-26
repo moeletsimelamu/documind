@@ -16,7 +16,7 @@ import { plural } from '../../core/format';
 import { LibraryStore } from '../../core/library.store';
 import { Icon } from '../../shared/icon';
 import { PassageCard } from '../../shared/passage-card';
-import { AnswerPart, splitCitations } from './citations';
+import { AnswerPart, citedWithoutMarker, splitCitations } from './citations';
 
 @Component({
   selector: 'dm-ask-page',
@@ -44,11 +44,19 @@ export class AskPage {
     () => this.draft().trim().length > 0 && !this.tooLong() && !this.session.busy(),
   );
 
+  /** What is happening while a question is being answered; a model can take a while to write. */
+  protected readonly workingMessage = computed(() => {
+    const config = this.config.config();
+    return config.llm_enabled
+      ? `Finding passages and asking ${config.llm_model ?? 'the AI model'} for an answer…`
+      : 'Looking for relevant passages…';
+  });
+
   /** For screen readers: announces when a response arrives. */
   protected readonly announcement = computed(() => {
     const latest = this.session.entries()[0];
     if (!latest || latest.state === 'loading') {
-      return latest ? 'Looking for relevant passages…' : '';
+      return latest ? this.workingMessage() : '';
     }
     if (latest.state === 'error') {
       return `The question could not be answered: ${latest.error?.message}`;
@@ -87,6 +95,10 @@ export class AskPage {
 
   protected answerParts(response: AskResponse): AnswerPart[] {
     return splitCitations(response.answer ?? '', response.cited);
+  }
+
+  protected unmarkedCitations(response: AskResponse): string[] {
+    return citedWithoutMarker(response.answer ?? '', response.cited);
   }
 
   protected sourceElementId(entryId: number, marker: string): string {

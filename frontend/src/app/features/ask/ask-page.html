@@ -93,7 +93,7 @@
       @switch (entry.state) {
         @case ('loading') {
           <p class="working" role="status">
-            <span class="spinner" aria-hidden="true"></span> Looking for relevant passages…
+            <span class="spinner" aria-hidden="true"></span> {{ workingMessage() }}
           </p>
         }
         @case ('error') {
@@ -139,6 +139,22 @@
                         }
                       }
                     </p>
+                    @let unmarked = unmarkedCitations(response);
+                    @if (unmarked.length) {
+                      <p class="answer-sources">
+                        <span class="subtle">Based on</span>
+                        @for (marker of unmarked; track marker) {
+                          <button
+                            type="button"
+                            class="marker"
+                            [class.active]="isSelected(entry.id, marker)"
+                            [attr.aria-label]="'Show source ' + marker"
+                            (click)="showSource(entry.id, marker)"
+                            [textContent]="marker"
+                          ></button>
+                        }
+                      </p>
+                    }
                     <p class="caution subtle">
                       Generated text can be wrong. Check each statement against its source.
                     </p>

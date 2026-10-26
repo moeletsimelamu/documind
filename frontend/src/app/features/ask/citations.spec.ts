@@ -1,4 +1,15 @@
-import { splitCitations } from './citations';
+import { citedWithoutMarker, splitCitations } from './citations';
+
+describe('citedWithoutMarker', () => {
+  it('lists confirmed sources that the text does not mark, in cited order', () => {
+    expect(citedWithoutMarker('Corpus: BooksCorpus and Wikipedia.', ['S4', 'S5'])).toEqual([
+      'S4',
+      'S5',
+    ]);
+    expect(citedWithoutMarker('Budget R4.5 million [S2].', ['S2', 'S3'])).toEqual(['S3']);
+    expect(citedWithoutMarker('Budget R4.5 million [S2].', ['S2'])).toEqual([]);
+  });
+});
 
 describe('splitCitations', () => {
   it('turns confirmed markers into separate parts', () => {

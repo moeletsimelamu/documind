@@ -26,3 +26,13 @@ export function splitCitations(answer: string, cited: readonly string[]): Answer
   }
   return parts;
 }
+
+/**
+ * Confirmed sources that the answer text never marks. Small models often list their sources in
+ * ``cited`` without writing markers into the text; these are shown after the answer instead, so
+ * every source the answer relies on can still be opened.
+ */
+export function citedWithoutMarker(answer: string, cited: readonly string[]): string[] {
+  const marked = new Set(Array.from(answer.matchAll(MARKER), (match) => match[1]));
+  return cited.filter((id) => !marked.has(id));
+}

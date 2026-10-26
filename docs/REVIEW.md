@@ -69,6 +69,9 @@ accessibility audit with axe-core; manual keyboard and reflow checks in the brow
 - **Prompt injection is reduced, not prevented.** A manipulated passage can still shape the wording
   of an answer that cites real passages; the UI shows sources beside every answer and labels it as
   generated and fallible.
+- **A model can state something wrong while citing a real passage.** Seen with Llama 3.2 3B ("BERT
+  LARGE has 12 layers", citing a passage about parameter counts). Citations are checked to exist,
+  not to support the statement; that check is the reader's, one click away.
 - **Hosted AI providers receive the question and retrieved passages.** Stated in the UI when AI
   answers are on; a local model avoids it.
 - **Swagger UI** (`/api/docs`) loads assets from jsDelivr under a relaxed CSP limited to that path.
@@ -85,5 +88,6 @@ accessibility audit with axe-core; manual keyboard and reflow checks in the brow
 
 - Screen-reader use with NVDA, JAWS or VoiceOver.
 - Browsers other than Chromium (Firefox, Safari/WebKit).
-- Behaviour under a real language model (Phase 6 used a test double).
+- Behaviour under a hosted language model or a larger local one. A small local model (Llama 3.2,
+  3B) was run on real documents after Phase 10; results in ARCHITECTURE.md §9.
 - Penetration testing by anyone other than the author.

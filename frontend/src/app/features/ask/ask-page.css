@@ -140,6 +140,19 @@
   color: var(--ink);
 }
 
+.answer-sources {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+}
+
+.answer-sources .marker {
+  vertical-align: baseline;
+}
+
 .caution {
   margin-top: var(--space-3);
 }

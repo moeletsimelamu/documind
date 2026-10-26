@@ -17,17 +17,23 @@ their contents, and ask questions whose answers always point back to the exact p
   the passage.
 - **Answers questions with sources.** Without an AI model, an answer is the most relevant passages,
   numbered S1, S2… With an OpenAI-compatible model configured (hosted, or local such as Ollama),
-  the model writes a short answer from those passages only, every statement cites one, and the
-  server removes any citation it cannot match to a retrieved passage. When the documents do not
-  contain the answer, DocuMind says so.
+  the model writes a short answer from those passages only and cites the ones it used; the server
+  removes any citation it cannot match to a retrieved passage, and each citation opens its source.
+  When the documents do not contain the answer, DocuMind says so.
 
-| Search | Reader | Ask |
+| Search | Reader | Ask (no AI model) |
 |---|---|---|
 | ![Search results with highlighted matches](docs/screenshots/search.png) | ![The reader opened at a highlighted passage on page 2](docs/screenshots/reader.png) | ![An answer made of numbered source passages](docs/screenshots/ask.png) |
 
-The screenshots are of the real application, with fictional documents and AI answers turned off
-(how they were made: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#6-screenshots)). The layout also
-works at phone width — [mobile search](docs/screenshots/mobile-search.png).
+These screenshots use fictional documents with AI answers off (how they were made:
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#6-screenshots)). The layout also works at phone width —
+[mobile search](docs/screenshots/mobile-search.png).
+
+**With a local AI model** — Llama 3.2 (3B) in Ollama on a laptop CPU, no account or key, asked about
+NIST SP 800-63B-4, a real 129-page standard. The answer cites S1; the cited passage is shown beside
+it:
+
+![A generated answer, "Based on S1", beside the highlighted NIST passage it cites](docs/screenshots/ask-ai.png)
 
 ## How it is built
 
@@ -94,12 +100,13 @@ only the model name. Everything else works without it.
 
 | Suite | What it covers | Result (2026-10-26) |
 |---|---|---|
-| Backend — pytest | API, validation, extraction (generated valid, corrupt, encrypted, image-only and fake PDFs), PDF layout clean-up, chunking, search, answer grounding with fake providers, middleware, SPA serving | 303 passed on Windows; 3 more (memory limit) run only on Linux/macOS |
+| Backend — pytest | API, validation, extraction (generated valid, corrupt, encrypted, image-only and fake PDFs), PDF layout clean-up, chunking, search, answer grounding with fake providers, middleware, SPA serving | 304 passed on Windows; 3 more (memory limit) run only on Linux/macOS |
 | Backend — ruff, mypy (strict) | Lint, formatting, types | clean |
-| Frontend — Vitest | Services and components, driven through the DOM | 62 passed |
+| Frontend — Vitest | Services and components, driven through the DOM | 65 passed |
 | End to end — Playwright | 8 complete workflows against the production build, and an axe accessibility audit of 6 page states | 14 passed, 0 accessibility violations |
 | Retrieval evaluation | 30 questions over fictional documents | hit@5: 100% for keyword questions, 56% for paraphrases ([ARCHITECTURE.md §7](docs/ARCHITECTURE.md#evaluation)) |
 | Real documents | Three public PDFs (a 129-page NIST standard, a 76-page HR guide, a two-column research paper), 11 natural questions judged by hand | processed in 1.7–6.4 s each; answer passage in the top 5 for 9 of 11 questions |
+| Real AI model | Llama 3.2 (3B) on a laptop CPU, the same 11 questions plus an unanswerable one and a request to ignore the documents, each answer checked against its sources | 4 correct, 3 partly right, 2 wrongly declined, 1 unhelpful, 1 wrong with a real citation; both control questions declined; 26–42 s per answer ([ARCHITECTURE.md §9](docs/ARCHITECTURE.md#9-question-answering)) |
 | Container | Build; non-root user; no data or `.env` file in the image; upload → search → Ask → delete in the running container | passed in CI ([run 40312172099](https://github.com/moeletsimelamu/documind/actions/runs/40312172099)); not run locally |
 
 ```bash
@@ -133,8 +140,9 @@ was verified, is in [docs/REVIEW.md](docs/REVIEW.md); it is not an independent a
 - **No OCR.** Scanned PDFs are detected and reported, not read.
 - **Single user, no authentication.** Not suitable for exposing to a network as it is
   ([what that would need](docs/DEPLOYMENT.md#5-putting-it-on-a-network-not-done-requirements-if-you-do)).
-- **Generated answers were tested against a local test double, not a real model.** Grounding and
-  citation checks are covered by tests; answer quality with a specific model has not been measured.
+- **Generated answers are only as good as the model.** With the small local model tested, about a
+  third of answers were fully right, and one was wrong while citing a real passage — which is why
+  every answer shows its sources. Hosted and larger models have not been tested.
 - **No public deployment.** The container image is built and tested in CI.
 - Browser-tested in Chromium only; not tested with screen readers.
 

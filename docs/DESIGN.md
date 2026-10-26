@@ -217,8 +217,12 @@ the health endpoint is polled every 5 s, and configuration and the library reloa
   and focuses that source. On wide screens only the Sources column scrolls; if the column runs off
   the bottom of the window, the answer row is first brought to the top so the answer stays on
   screen. On narrow screens the page scrolls to the source below the answer.
+- Sources the model cited without placing a marker in the text (common with small models) appear
+  under the answer as "Based on **S4** **S5**", the same chips, so every cited source can be opened.
 - Sources that were retrieved but not cited stay visible, dimmed, with "Retrieved but not cited in
   the answer."
+- While waiting: "Finding passages and asking {model} for an answer…" (a local model on a CPU took
+  up to 42 s), or "Looking for relevant passages…" when AI answers are off.
 - Provider failure: amber banner "No AI answer this time. {reason} Showing the most relevant
   passages instead." Insufficient evidence after retrieval: neutral notice plus "Closest passages".
 - When AI answers are on, the Ask page names the model and states that the question and the passages

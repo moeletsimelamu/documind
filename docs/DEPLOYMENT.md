@@ -73,7 +73,25 @@ ARCHITECTURE.md §11 and `.env.example`. The ones that matter for deployment:
 | `DOCUMIND_ALLOWED_HOSTS` | `["localhost","127.0.0.1","[::1]"]` | Must include the host name used in the browser; protects against DNS rebinding |
 | `DOCUMIND_API_DOCS` | `true` (`false` in the image) | Swagger UI at `/api/docs` |
 | `DOCUMIND_MAX_UPLOAD_MB`, `DOCUMIND_MAX_PDF_PAGES`, `DOCUMIND_EXTRACTION_TIMEOUT_SECONDS`, `DOCUMIND_EXTRACTION_MEMORY_LIMIT_MB` | 20, 500, 120, 1024 | Resource limits; the memory limit applies on Linux/macOS only |
-| `DOCUMIND_LLM_MODEL`, `DOCUMIND_LLM_BASE_URL`, `DOCUMIND_LLM_API_KEY`, `DOCUMIND_LLM_TIMEOUT_SECONDS` | unset, OpenAI, unset, 30 | AI answers; unset model = off |
+| `DOCUMIND_LLM_MODEL`, `DOCUMIND_LLM_BASE_URL`, `DOCUMIND_LLM_API_KEY`, `DOCUMIND_LLM_TIMEOUT_SECONDS` | unset, OpenAI, unset, 30 | AI answers; unset model = off. Raise the timeout for a local model (below) |
+
+### AI answers from a local model (no account, no key)
+
+Tested with [Ollama](https://ollama.com) 0.40.11 and Llama 3.2 (3B) on a laptop CPU:
+
+1. Install Ollama, then `ollama pull llama3.2` (about 2 GB; no account needed).
+2. Start DocuMind with:
+
+   ```bash
+   DOCUMIND_LLM_MODEL=llama3.2
+   DOCUMIND_LLM_BASE_URL=http://localhost:11434/v1
+   DOCUMIND_LLM_TIMEOUT_SECONDS=240
+   ```
+
+Questions and passages then go only to `localhost`. Expect 25–45 s per answer without a dedicated
+GPU; the default 30 s timeout would cut some of those off, and DocuMind would fall back to showing
+the passages with "No AI answer this time". What this model got right and wrong on real documents is
+in ARCHITECTURE.md §9: it is good enough to demonstrate grounded answers, not to rely on.
 
 ## 4. Operations
 

@@ -5,6 +5,9 @@
 // Expects the server to hold the fictional sample documents from backend/tests/eval/dataset.py
 // plus an image-only PDF (see docs/DEPLOYMENT.md, "Screenshots"). AI answers are off, so the Ask
 // screenshot shows the retrieval-only mode.
+//
+// With DOCUMIND_AI_QUESTION set, only the AI-answer screenshot (ask-ai.png) is taken instead: the
+// server must have a model configured and documents that answer the question.
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
@@ -27,6 +30,23 @@ async function shoot(name, viewport, steps) {
 const desktop = { width: 1280, height: 800 };
 const tall = { width: 1280, height: 1100 };
 const phone = { width: 390, height: 844 };
+const aiQuestion = process.env.DOCUMIND_AI_QUESTION;
+
+if (aiQuestion) {
+  await shoot('ask-ai', desktop, async (page) => {
+    await page.goto(`${base}/ask`);
+    const question = page.getByLabel('Your question');
+    await question.fill(aiQuestion);
+    await question.press('Enter');
+    // A local model on a CPU can take a minute or more.
+    await page.locator('.answer').waitFor({ timeout: 300_000 });
+    await page.locator('.answer .marker').first().click(); // show the first cited source
+    await page.locator('.sources-panel li.selected').waitFor();
+    await page.locator('.entry').evaluate((entry) => window.scrollTo(0, entry.offsetTop - 16));
+  });
+  await browser.close();
+  process.exit(0);
+}
 
 await shoot('library', desktop, async (page) => {
   await page.goto(`${base}/library`);
