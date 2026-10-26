@@ -33,7 +33,7 @@ Date: 2026-10-26. The full review, with every finding and its evidence, is in
 | End to end (`npm run e2e`) | **14 passed**: 8 workflows (now behind the host/origin guard) + 6 accessibility audits with **0 violations** |
 | Mutation checks | Removing the limiter: concurrency test fails (6 jobs started at once). Removing a form label: axe reports "critical label". |
 | Reflow | All pages at 320 px: no horizontal scrolling |
-| Linux CI | See below |
+| Linux CI | [Run 40305335014](https://github.com/moeletsimelamu/documind/actions/runs/40305335014) on `fc8be74`: all four jobs passed (backend on Python 3.12 and 3.14, frontend, end to end incl. the accessibility audit). The memory-limit tests are skipped only when `memory_limit_supported()` is false; `test_memory_limit_support_matches_the_platform`, which asserts it is true off Windows, passed on Linux — so the three tests ran there and passed. (Step logs need a GitHub sign-in to view and were not read.) |
 
 ## Not verified
 

@@ -14,7 +14,7 @@ report in `docs/phase-reports/`.
 | 5 | Frontend and design | Done |
 | 6 | Optional AI answers | Done |
 | 7 | Integration hardening | Done |
-| 8 | Automated testing and CI | Workflow written and rehearsed from a clean clone; **first GitHub run pending** (no remote yet) |
+| 8 | Automated testing and CI | Running on GitHub, all jobs green; failing-check demonstration pending a pull request |
 | 9 | Security, accessibility, review | Done — see REVIEW.md |
 | 10 | Packaging and presentation | Not started |
 
