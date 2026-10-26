@@ -19,6 +19,7 @@ from documind.errors import register_error_handlers
 from documind.ingestion.pipeline import DocumentProcessor, too_large_message
 from documind.logging_setup import configure_logging
 from documind.middleware import RequestContextMiddleware, UploadSizeLimitMiddleware
+from documind.spa import register_spa
 from documind.storage import LocalFileStorage
 
 logger = logging.getLogger(__name__)
@@ -92,4 +93,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(documents.router, prefix="/api")
     app.include_router(search.router, prefix="/api")
     app.include_router(ask.router, prefix="/api")
+    if settings.static_dir is not None:
+        register_spa(app, settings.static_dir)  # last: it matches every remaining GET path
     return app

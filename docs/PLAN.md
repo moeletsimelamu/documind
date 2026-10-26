@@ -13,7 +13,7 @@ report in `docs/phase-reports/`.
 | 4 | Search and retrieval | Done |
 | 5 | Frontend and design | Done |
 | 6 | Optional AI answers | Done |
-| 7 | Integration hardening | Not started |
+| 7 | Integration hardening | Done |
 | 8 | Automated testing and CI | Not started |
 | 9 | Security, accessibility, review | Not started |
 | 10 | Packaging and presentation | Not started |
@@ -101,6 +101,9 @@ commands are executed as written.
 | D25 | Browser learns the model name, never the provider address or key | Enough to tell the user what answers; nothing an attacker could use. |
 | D26 | Insufficient evidence shows the closest passages, not the model's explanation | The explanation is generated text; showing it without the answer framing would blur the line between sources and generation. |
 | D27 | Live path checked against a local test double; no paid provider used | The brief forbids requiring a paid service; a real-model run remains a documented check. |
+| D28 | FastAPI serves the built SPA (moved forward from Phase 10) | One process to run and test end to end; the SPA's security policy is exercised for real. |
+| D29 | Angular critical-CSS inlining off | Its inline `onload` handler is blocked by the CSP; found before it shipped. |
+| D30 | Playwright end-to-end suite (Chromium only) | Proportionate: 8 workflow tests in ~13 s prove the frontend and backend work together, repeatably in CI. |
 | D12 | Commits use `Moeletsi Melamu <moeletsimelamu03@gmail.com>`, set in the repo's local config | Owner's choice (2026-10-25). |
 | D11 | Single container: FastAPI serves the built SPA | One process to run; same-origin, no CORS. |
 

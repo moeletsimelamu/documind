@@ -42,6 +42,18 @@ npm start
 
 Open `http://localhost:4200`. API calls are proxied to the backend.
 
+## Running as one process (production build)
+
+```bash
+cd frontend
+npm run build
+cd ../backend
+DOCUMIND_STATIC_DIR=../frontend/dist/documind-web/browser .venv/bin/python -m uvicorn documind.main:create_app --factory --port 8000
+```
+
+On Windows PowerShell set the variable with `$env:DOCUMIND_STATIC_DIR='..\frontend\dist\documind-web\browser'`
+and use `.venv\Scripts\python`. Open `http://localhost:8000`.
+
 ## Checks
 
 ```bash
@@ -56,4 +68,6 @@ cd frontend
 npm test
 npm run format:check
 npm run build
+npx playwright install chromium   # once
+npm run e2e                       # builds, starts the backend, runs browser tests
 ```

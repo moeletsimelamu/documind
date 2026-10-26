@@ -19,6 +19,9 @@ class Settings(BaseSettings):
 
     # Storage
     data_dir: Path = Path("data")
+    # Built frontend to serve from this process (production / container). Unset in development,
+    # where the Angular dev server is used instead.
+    static_dir: Path | None = None
 
     # Resource limits
     max_upload_mb: int = Field(default=20, ge=1, le=200)
