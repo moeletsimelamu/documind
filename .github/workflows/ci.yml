@@ -1,11 +1,10 @@
-# Continuous integration: every push to main and every pull request is checked on a clean Linux
-# machine — lint, types and tests for the backend, formatting, tests and a production build for the
-# frontend, and the end-to-end suite against the real backend serving that build.
+# Continuous integration: every push, to any branch, and every pull request is checked on a clean
+# Linux machine — lint, types and tests for the backend, formatting, tests and a production build
+# for the frontend, and the end-to-end suite against the real backend serving that build.
 name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
