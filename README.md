@@ -71,3 +71,10 @@ npm run build
 npx playwright install chromium   # once
 npm run e2e                       # builds, starts the backend, runs browser tests
 ```
+
+## Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request: backend lint,
+formatting, strict type checks and tests on Python 3.12 and 3.14; frontend formatting, unit tests
+and production build; and the end-to-end suite in Chromium against the backend serving the build.
+No step needs network access to an AI provider.
