@@ -5,9 +5,11 @@ questions whose answers point back to the exact passages they came from.
 
 **Status: in development.** Working today, through a web interface and the HTTP API: upload PDF
 and text files and watch them being processed; browse, filter, read and delete documents; keyword
-search with highlighted excerpts that open the document at the passage; and asking questions,
-answered with the most relevant passages. AI-generated answers (optional, OpenAI-compatible) are
-not built yet. See
+search with highlighted excerpts that open the document at the passage; and asking questions.
+Without an AI model configured, answers are the most relevant passages. With an
+OpenAI-compatible model configured (hosted, or local such as Ollama), answers are generated
+from those passages, every statement cites one, and citations the server cannot match to a
+retrieved passage are removed. Continuous integration and packaging are still to come. See
 [docs/PLAN.md](docs/PLAN.md) for progress, [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the
 technical design and [docs/DESIGN.md](docs/DESIGN.md) for the interface design.
 

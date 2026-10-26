@@ -5,6 +5,7 @@ export type FileType = 'pdf' | 'txt';
 
 export interface ClientConfig {
   llm_enabled: boolean;
+  llm_model: string | null;
   allowed_file_types: FileType[];
   max_upload_bytes: number;
   max_pdf_pages: number;
@@ -82,8 +83,14 @@ export interface AskResponse {
   mode: AnswerMode;
   question: string;
   searched_for: string[];
+  /** Generated text with [S1]-style citations; only when mode is "generated". */
   answer: string | null;
+  /** Ids of cited passages. Passage n (1-based) is "S<n>". */
+  cited: string[];
   passages: SearchHit[];
+  /** Set when AI answers are on but the provider failed; passages are still returned. */
+  generation_error: { code: string; message: string } | null;
+  model: string | null;
 }
 
 export interface ApiErrorBody {

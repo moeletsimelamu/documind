@@ -12,7 +12,7 @@ report in `docs/phase-reports/`.
 | 3 | Ingestion and indexing | Done |
 | 4 | Search and retrieval | Done |
 | 5 | Frontend and design | Done |
-| 6 | Optional AI answers | Not started |
+| 6 | Optional AI answers | Done |
 | 7 | Integration hardening | Not started |
 | 8 | Automated testing and CI | Not started |
 | 9 | Security, accessibility, review | Not started |
@@ -98,6 +98,9 @@ commands are executed as written.
 | D22 | Angular 21.2 with exact pins and a `vite` override to 7.3.7 | npm 10.9 resolver crash on newer Vite's optional peers; 7.3.7 is what `@angular/build` pins. |
 | D23 | Native `<dialog>`, no Angular CDK or UI kit | Platform modality and inert background; fewer dependencies. |
 | D24 | 5xx without the API envelope = server unreachable | The API always sends its envelope; the dev proxy and reverse proxies do not. |
+| D25 | Browser learns the model name, never the provider address or key | Enough to tell the user what answers; nothing an attacker could use. |
+| D26 | Insufficient evidence shows the closest passages, not the model's explanation | The explanation is generated text; showing it without the answer framing would blur the line between sources and generation. |
+| D27 | Live path checked against a local test double; no paid provider used | The brief forbids requiring a paid service; a real-model run remains a documented check. |
 | D12 | Commits use `Moeletsi Melamu <moeletsimelamu03@gmail.com>`, set in the repo's local config | Owner's choice (2026-10-25). |
 | D11 | Single container: FastAPI serves the built SPA | One process to run; same-origin, no CORS. |
 

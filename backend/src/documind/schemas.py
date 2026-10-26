@@ -29,6 +29,8 @@ class ClientConfig(BaseModel):
     """Settings the browser needs. Never contains credentials or server paths."""
 
     llm_enabled: bool
+    # The model name only; the provider address and credentials are never sent to the browser.
+    llm_model: str | None
     allowed_file_types: list[str]
     max_upload_bytes: int
     max_pdf_pages: int
@@ -124,11 +126,22 @@ class AskRequest(BaseModel):
     document_ids: list[uuid.UUID] | None = Field(default=None, max_length=50)
 
 
+class GenerationError(BaseModel):
+    code: str
+    message: str
+
+
 class AskResponse(BaseModel):
     mode: Literal["generated", "retrieval_only", "insufficient_evidence"]
     question: str
     searched_for: list[str]
-    # Generated text; always null unless mode is "generated".
+    # Generated text with [S1]-style citations; always null unless mode is "generated".
     answer: str | None = None
+    # Ids of the passages the answer cites. Passage n (1-based) in ``passages`` is "S<n>".
+    cited: list[str] = Field(default_factory=list)
     # The retrieved passages the response is based on, best first.
     passages: list[SearchHit]
+    # Set when AI answers are on but the provider failed; the passages are still returned.
+    generation_error: GenerationError | None = None
+    # The model that produced the answer, when one was asked.
+    model: str | None = None

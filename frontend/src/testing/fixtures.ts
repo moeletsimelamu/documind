@@ -1,4 +1,4 @@
-import { AskResponse, DocumentSummary, SearchHit } from '../app/core/api.models';
+import { AskResponse, ClientConfig, DocumentSummary, SearchHit } from '../app/core/api.models';
 
 export function makeDocument(overrides: Partial<DocumentSummary> = {}): DocumentSummary {
   return {
@@ -37,13 +37,29 @@ export function makeHit(overrides: Partial<SearchHit> = {}): SearchHit {
   };
 }
 
+export function makeConfig(overrides: Partial<ClientConfig> = {}): ClientConfig {
+  return {
+    llm_enabled: false,
+    llm_model: null,
+    allowed_file_types: ['pdf', 'txt'],
+    max_upload_bytes: 20 * 1024 * 1024,
+    max_pdf_pages: 500,
+    max_query_chars: 300,
+    max_question_chars: 1000,
+    ...overrides,
+  };
+}
+
 export function makeAskResponse(overrides: Partial<AskResponse> = {}): AskResponse {
   return {
     mode: 'retrieval_only',
     question: 'Which supplier was late?',
     searched_for: ['supplier', 'late'],
     answer: null,
+    cited: [],
     passages: [makeHit()],
+    generation_error: null,
+    model: null,
     ...overrides,
   };
 }

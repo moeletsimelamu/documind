@@ -30,3 +30,5 @@ def configure_logging(level: str) -> None:
     # Uvicorn's access log includes query strings, which can contain search terms. The
     # application writes its own access log line without them.
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    # The HTTP client logs every request URL at INFO; DocuMind logs provider calls itself.
+    logging.getLogger("httpx2").setLevel(logging.WARNING)

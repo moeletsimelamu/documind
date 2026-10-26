@@ -6,6 +6,7 @@ import { ApiService } from './api.service';
 /** Limits used before the server is asked; the server enforces them again. */
 const FALLBACK: ClientConfig = {
   llm_enabled: false,
+  llm_model: null,
   allowed_file_types: ['pdf', 'txt'],
   max_upload_bytes: 20 * 1024 * 1024,
   max_pdf_pages: 500,

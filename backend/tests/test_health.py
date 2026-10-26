@@ -47,6 +47,7 @@ def test_config_reports_limits_and_ai_off_by_default(client: TestClient) -> None
     assert response.status_code == 200
     assert response.json() == {
         "llm_enabled": False,
+        "llm_model": None,
         "allowed_file_types": ["pdf", "txt"],
         "max_upload_bytes": 20 * 1024 * 1024,
         "max_pdf_pages": 500,
@@ -66,5 +67,6 @@ def test_config_never_exposes_credentials_or_endpoint(tmp_path: Path) -> None:
         response = client.get("/api/config")
 
     assert response.json()["llm_enabled"] is True
+    assert response.json()["llm_model"] == "test-model"
     assert "sk-test-very-secret" not in response.text
     assert "llm.internal.example" not in response.text

@@ -1,8 +1,11 @@
 from typing import Any
 
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from documind.answering.provider import ProviderTimeoutError
+from tests.fakes import FakeModel
 from tests.test_documents_api import uploaded
 
 NOTES = b"Board meeting\n\nThe board approved a budget of R4.5 million for Project Falcon.\n"
@@ -69,3 +72,54 @@ def test_invalid_questions_are_rejected(
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == code
+
+
+# --- With a language model ---------------------------------------------------------------------
+
+
+def with_model(client: TestClient, model: FakeModel) -> None:
+    app = client.app
+    assert isinstance(app, FastAPI)
+    app.state.language_model = model
+
+
+def test_generated_answer_carries_its_citations_and_model(
+    client: TestClient, notes: dict[str, Any]
+) -> None:
+    with_model(
+        client,
+        FakeModel({"sufficient": True, "answer": "R4.5 million [S1][S4].", "cited": ["S1"]}),
+    )
+
+    body = ask(client, question="What budget did the board approve?").json()
+
+    assert body["mode"] == "generated"
+    assert body["answer"] == "R4.5 million [S1]."
+    assert body["cited"] == ["S1"]
+    assert body["model"] == "fake-model"
+    assert body["generation_error"] is None
+    assert body["passages"][0]["document_id"] == notes["id"]
+
+
+def test_provider_failure_is_reported_alongside_the_passages(
+    client: TestClient, notes: dict[str, Any]
+) -> None:
+    with_model(
+        client, FakeModel(error=ProviderTimeoutError("The AI provider did not respond in time."))
+    )
+
+    body = ask(client, question="What budget did the board approve?").json()
+
+    assert body["mode"] == "retrieval_only"
+    assert body["answer"] is None
+    assert body["generation_error"] == {
+        "code": "provider_timeout",
+        "message": "The AI provider did not respond in time.",
+    }
+    assert body["passages"]
+
+
+def test_app_builds_no_model_client_when_ai_is_off(client: TestClient) -> None:
+    app = client.app
+    assert isinstance(app, FastAPI)
+    assert app.state.language_model is None

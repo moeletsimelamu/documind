@@ -69,6 +69,7 @@ def ready(session: SessionDep, settings: SettingsDep) -> JSONResponse:
 def client_config(settings: SettingsDep) -> ClientConfig:
     return ClientConfig(
         llm_enabled=settings.llm_enabled,
+        llm_model=settings.llm_model_name,
         allowed_file_types=list(ALLOWED_FILE_TYPES),
         max_upload_bytes=settings.max_upload_bytes,
         max_pdf_pages=settings.max_pdf_pages,

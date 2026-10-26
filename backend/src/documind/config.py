@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.openai.com/v1"
     llm_api_key: SecretStr | None = None
     llm_timeout_seconds: float = Field(default=30.0, gt=0, le=300)
+    llm_max_output_tokens: int = Field(default=700, ge=50, le=4000)
 
     # Operations
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -41,7 +42,13 @@ class Settings(BaseSettings):
 
     @property
     def llm_enabled(self) -> bool:
-        return bool(self.llm_model and self.llm_model.strip())
+        return self.llm_model_name is not None
+
+    @property
+    def llm_model_name(self) -> str | None:
+        """The configured model, or None when AI answers are off."""
+        name = (self.llm_model or "").strip()
+        return name or None
 
     @property
     def max_upload_bytes(self) -> int:

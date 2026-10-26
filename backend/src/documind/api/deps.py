@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
+from documind.answering.provider import LanguageModel
 from documind.config import Settings
 from documind.ingestion.pipeline import DocumentProcessor
 from documind.storage import LocalFileStorage
@@ -35,7 +36,13 @@ def get_processor(request: Request) -> DocumentProcessor:
     return processor
 
 
+def get_language_model(request: Request) -> LanguageModel | None:
+    model: LanguageModel | None = request.app.state.language_model
+    return model
+
+
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 SessionDep = Annotated[Session, Depends(get_session)]
 StorageDep = Annotated[LocalFileStorage, Depends(get_storage)]
 ProcessorDep = Annotated[DocumentProcessor, Depends(get_processor)]
+LanguageModelDep = Annotated[LanguageModel | None, Depends(get_language_model)]
