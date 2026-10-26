@@ -94,11 +94,12 @@ only the model name. Everything else works without it.
 
 | Suite | What it covers | Result (2026-10-26) |
 |---|---|---|
-| Backend — pytest | API, validation, extraction (generated valid, corrupt, encrypted, image-only and fake PDFs), chunking, search, answer grounding with fake providers, middleware, SPA serving | 293 passed on Windows; 3 more (memory limit) run only on Linux/macOS |
+| Backend — pytest | API, validation, extraction (generated valid, corrupt, encrypted, image-only and fake PDFs), PDF layout clean-up, chunking, search, answer grounding with fake providers, middleware, SPA serving | 303 passed on Windows; 3 more (memory limit) run only on Linux/macOS |
 | Backend — ruff, mypy (strict) | Lint, formatting, types | clean |
 | Frontend — Vitest | Services and components, driven through the DOM | 62 passed |
 | End to end — Playwright | 8 complete workflows against the production build, and an axe accessibility audit of 6 page states | 14 passed, 0 accessibility violations |
 | Retrieval evaluation | 30 questions over fictional documents | hit@5: 100% for keyword questions, 56% for paraphrases ([ARCHITECTURE.md §7](docs/ARCHITECTURE.md#evaluation)) |
+| Real documents | Three public PDFs (a 129-page NIST standard, a 76-page HR guide, a two-column research paper), 11 natural questions judged by hand | processed in 1.7–6.4 s each; answer passage in the top 5 for 9 of 11 questions |
 | Container | Build; non-root user; no data or `.env` file in the image; upload → search → Ask → delete in the running container | passed in CI ([run 40312172099](https://github.com/moeletsimelamu/documind/actions/runs/40312172099)); not run locally |
 
 ```bash

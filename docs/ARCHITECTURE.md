@@ -190,9 +190,32 @@ need (REVIEW.md R3):
    - More than `MAX_EXTRACTED_CHARS` (2,000,000) fails with `too_large`; nothing is truncated.
    - Timeout → `timeout`; worker crash → `processing_error`; missing file → `file_missing`.
 7. **Normalise** (in the worker): Unicode NFKC (ligatures such as "ﬁ" become "fi"), line endings to
-   `\n`, other control characters to spaces, soft hyphens removed, runs of spaces collapsed. For
-   PDFs only, a lowercase word split across a line break with a hyphen is rejoined
-   ("inter-\nnational"). Text files keep their line structure so line numbers stay correct.
+   `\n`, other control characters to spaces, soft hyphens removed, runs of spaces collapsed. Text
+   files keep their line structure so line numbers stay correct.
+
+   **PDF layout clean-up** (`layout.clean_pdf_pages`, over the whole document). pypdf gives each
+   page as lines with no paragraph information and with the running header, footer and page number
+   mixed in; tested on real documents, a header such as "NIST SP 800-63B-4 … Digital Identity
+   Guidelines" matched a search on every one of 129 pages, and each page showed as one block.
+   - Running headers/footers: lines among the first or last few of a page (at most a quarter of
+     its lines) that recur, digits ignored, at the edges of ≥ 30% of pages (and ≥ 3) are removed,
+     repeatedly, so a four-line header goes entirely.
+   - Page numbers: only the outermost line of a page, and only if written as such ("Page 4 of 9",
+     roman numerals on ≥ 2 pages) or, for a bare number, if *printed number − page index* is the
+     same on ≥ 30% of pages — a number at the bottom of a table does not rise with the page, so it
+     stays.
+   - Structure: a blank line before list items (•, –, "1.", "(a)"), around headings (numbered, or
+     short lines without end punctuation between sentences), and after a line that ends a sentence
+     well short of the page's usual line length. A full-width line ending in a full stop is
+     ambiguous and stays joined.
+   - Dot leaders in contents pages become " … "; a word split across lines with a hyphen is rejoined
+     ("inter-\nnational"), keeping the hyphen when the word is hyphenated elsewhere in the document
+     or already contains one ("task-\nspecific", "left-to-\nright"), and leaving a capitalised second
+     part alone ("Anglo-\nSaxon").
+
+   Only whole lines at page edges are removed. On the three real PDFs below, the words lost were
+   exactly the header words once per page; every other difference was a compound regaining its
+   hyphen.
 8. **Chunk** (`chunk_lines`): lines are grouped into paragraphs (separated by blank lines). A
    paragraph that does not fit in the current chunk (target 1,000 characters) starts a new chunk,
    unless the current chunk is still under half the target (e.g. just a heading). Inside a long
@@ -218,8 +241,19 @@ PDFs: 50 pages extract in 0.7 s in-process and 3.1 s isolated; 500 pages (1.6 mi
 the size limits' worst case) in 7.2 s in-process and 10.0 s isolated, 11.7 s end to end through the
 API including 2,000 chunks indexed. Starting the worker process costs about 2.4 s on Windows. The
 120 s timeout therefore leaves a wide margin for legitimate documents while bounding hostile ones.
-A memory limit for the worker is not enforced (there is no portable way on Windows); this is
-recorded for the Phase 9 review.
+The worker's memory is limited on Linux and macOS (`RLIMIT_AS`, REVIEW.md R4), not on Windows.
+
+**Real documents** (downloaded for testing, not in the repository), end to end through the API:
+
+| Document | Pages | Chunks | Processing |
+|---|---|---|---|
+| NIST SP 800-63B-4, *Digital Identity Guidelines: Authentication* (2025) | 129 | 358 | 6.4 s |
+| Acas, *Discipline and grievances at work* (2020) | 76 | 203 | 3.3 s |
+| Devlin et al., *BERT* (arXiv 1810.04805v2), two-column with figures | 16 | 80 | 1.7 s |
+
+Two-column text came out in reading order. Text inside figures comes out as fragments, and
+subscripts merge with the word before them ("BERT<sub>LARGE</sub>" becomes "BERTLARGE"), which
+keyword search then cannot match.
 
 ## 7. Retrieval
 
@@ -271,6 +305,20 @@ below 80%.
 Caveats: the set is small, and the documents and questions were written by the same author as the
 retrieval code, which flatters the keyword results; the documents are short, so each fits in a few
 chunks. The numbers show the *shape* of the limitation, not production accuracy.
+
+**Real documents.** Eleven natural questions over the three real PDFs in §6 (four on the Acas
+guide, four on NIST, three on BERT), each judged against the passage that actually answers it,
+found by reading the documents. Same in-process path as above, top 10:
+
+| | hit@1 | hit@3 | hit@5 | hit@10 | MRR@10 |
+|---|---|---|---|---|---|
+| Before the layout clean-up | 2/11 | 7/11 | 8/11 | 9/11 | 0.42 |
+| After | 5/11 | 8/11 | 9/11 | 10/11 | 0.59 |
+
+The remaining misses: "What is a syncable authenticator?" (many passages use the term; the one
+that defines it ranks below them) and "How many layers does BERT large have?" (rank 8: the answer
+reads "BERTLARGE (L=24 …)"). Eleven questions are too few for precise rates; the comparison shows
+the direction. The documents are not redistributed, so this check is not part of the test suite.
 
 **Not done, deliberately:** synonym lists (brittle and domain-specific) and embedding-based
 retrieval (a model dependency and download). Semantic retrieval is the obvious improvement for the

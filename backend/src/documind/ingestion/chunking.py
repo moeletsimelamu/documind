@@ -13,29 +13,26 @@ from dataclasses import dataclass
 CHUNK_TARGET_CHARS = 1000
 CHUNK_MAX_CHARS = 1600
 
-_HYPHENATED_LINE_BREAK = re.compile(r"([a-z])-\n([a-z])")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 _SPACES = re.compile(r"[ \t]+")
 
 
-def normalize_text(text: str, *, join_hyphenated: bool = False) -> str:
+def normalize_text(text: str) -> str:
     """Make extracted text consistent for indexing and display.
 
     - Unicode NFKC (e.g. the "ﬁ" ligature becomes "fi", non-breaking spaces become spaces).
     - Line endings become ``\\n``; other control characters become spaces; NUL is removed.
     - Runs of spaces collapse; trailing spaces are removed. Line breaks are kept, so line numbers
       in text files stay correct.
-    - ``join_hyphenated`` (PDFs only) rejoins words split across lines: "inter-\\nnational".
+
+    PDF pages are cleaned further, as one document, by ``layout.clean_pdf_pages``.
     """
     text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\x00", "")
     text = unicodedata.normalize("NFKC", text)
     text = "".join(ch if ch == "\n" or unicodedata.category(ch) != "Cc" else " " for ch in text)
     text = text.replace("­", "")  # soft hyphen
     lines = [_SPACES.sub(" ", line).strip() for line in text.split("\n")]
-    text = "\n".join(lines)
-    if join_hyphenated:
-        text = _HYPHENATED_LINE_BREAK.sub(r"\1\2", text)
-    return text
+    return "\n".join(lines)
 
 
 @dataclass(frozen=True)

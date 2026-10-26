@@ -14,6 +14,7 @@ from pypdf import PasswordType, PdfReader
 from pypdf.errors import DependencyError
 
 from documind.ingestion.chunking import normalize_text
+from documind.ingestion.layout import clean_pdf_pages
 from documind.ingestion.validation import TextDecodingError, decode_text
 
 logger = logging.getLogger(__name__)
@@ -140,7 +141,7 @@ def _extract_pdf(data: bytes, max_pages: int) -> ExtractedDocument:
             "too_large", f"This PDF has {page_count:,} pages; the limit is {max_pages:,}."
         )
 
-    pages: list[ExtractedPage] = []
+    texts: list[str] = []
     unreadable_pages = 0
     for number in range(1, page_count + 1):
         try:
@@ -150,7 +151,11 @@ def _extract_pdf(data: bytes, max_pages: int) -> ExtractedDocument:
             # without text, which the user sees.
             unreadable_pages += 1
             raw = ""
-        pages.append(ExtractedPage(number=number, text=normalize_text(raw, join_hyphenated=True)))
+        texts.append(normalize_text(raw))
+    pages = [
+        ExtractedPage(number=number, text=text)
+        for number, text in enumerate(clean_pdf_pages(texts), start=1)
+    ]
 
     if unreadable_pages == page_count:
         raise damaged

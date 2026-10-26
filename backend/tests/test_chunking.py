@@ -31,13 +31,7 @@ def test_normalize_keeps_line_count_for_text_files() -> None:
     normalized = normalize_text(raw)
 
     assert normalized.count("\n") == raw.count("\n")
-    assert "six-\nseven" in normalized  # hyphens are only joined for PDFs
-
-
-def test_normalize_joins_hyphenated_line_breaks_for_pdfs() -> None:
-    assert normalize_text("inter-\nnational", join_hyphenated=True) == "international"
-    # A capitalised second part is probably a real compound or name: left alone.
-    assert normalize_text("Anglo-\nSaxon", join_hyphenated=True) == "Anglo-\nSaxon"
+    assert "six-\nseven" in normalized  # hyphens are only joined for PDFs (layout.py)
 
 
 def test_normalize_removes_soft_hyphens() -> None:
