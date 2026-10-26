@@ -66,7 +66,7 @@ describe('SearchPage', () => {
     expect(page.querySelector('mark')?.textContent).toBe('Supplier');
     expect(text()).toContain('p. 2');
     const openLink = page.querySelector<HTMLAnchorElement>('a.open')!;
-    expect(openLink.getAttribute('href')).toBe('/documents/doc-1?chunk=11');
+    expect(openLink.getAttribute('href')).toBe('/documents/doc-1?chunk=11&q=supplier'); // the reader finds the words again
   });
 
   it('limits the search to one document when one is chosen', async () => {

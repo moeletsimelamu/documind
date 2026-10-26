@@ -4,8 +4,33 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 
 import { makeDocument } from '../../../testing/fixtures';
-import { Chunk } from '../../core/api.models';
+import { Chunk, DocumentMatches } from '../../core/api.models';
+import { PdfPageRenderer, RenderedPage } from '../../core/pdf-page-renderer.service';
 import { DocumentPage, READER_PAGE_SIZE } from './document-page';
+
+/** Stands in for pdf.js, which jsdom cannot run; real rendering is checked end to end. */
+class FakeRenderer {
+  calls: { url: string; page: number; passage: string | null }[] = [];
+  result: RenderedPage | Error = {
+    pageCount: 3,
+    width: 400,
+    height: 520,
+    passageBoxes: [{ left: 40, top: 100, width: 300, height: 14 }],
+  };
+
+  render(
+    url: string,
+    page: number,
+    _canvas: HTMLCanvasElement,
+    _width: number,
+    passage: string | null,
+  ): Promise<RenderedPage> {
+    this.calls.push({ url, page, passage });
+    return this.result instanceof Error
+      ? Promise.reject(this.result)
+      : Promise.resolve(this.result);
+  }
+}
 
 const chunk = (
   id: number,
@@ -25,11 +50,18 @@ describe('DocumentPage', () => {
   let fixture: ComponentFixture<DocumentPage>;
   let http: HttpTestingController;
   let page: HTMLElement;
+  let renderer: FakeRenderer;
 
   beforeEach(() => {
+    renderer = new FakeRenderer();
     TestBed.configureTestingModule({
       imports: [DocumentPage],
-      providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: PdfPageRenderer, useValue: renderer },
+      ],
     });
     http = TestBed.inject(HttpTestingController);
     fixture = TestBed.createComponent(DocumentPage);
@@ -139,5 +171,184 @@ describe('DocumentPage', () => {
     await fixture.whenStable();
 
     expect(page.querySelector('h1')?.textContent).toBe('Document not found');
+  });
+
+  describe('navigation in a long PDF', () => {
+    const LONG = makeDocument({ page_count: 120, chunk_count: 300 });
+    const windowFrom = (offset: number, page = 1) => ({
+      document_id: 'doc-1',
+      total: 300,
+      offset,
+      limit: READER_PAGE_SIZE,
+      items: Array.from({ length: 10 }, (_, i) =>
+        chunk(1000 + offset + i, offset + i, page, `Passage ${offset + i} about suppliers`),
+      ),
+    });
+
+    async function openLong(q?: string): Promise<void> {
+      fixture.componentRef.setInput('q', q);
+      await open('doc-1');
+      http.expectOne('/api/documents/doc-1').flush(LONG);
+      http.expectOne((r) => r.url === '/api/documents/doc-1/chunks').flush(windowFrom(0));
+      await fixture.whenStable();
+    }
+
+    const field = (id: string) => page.querySelector<HTMLInputElement>(`#${id}`)!;
+    async function submit(id: string, value: string): Promise<void> {
+      field(id).value = value;
+      field(id).dispatchEvent(new Event('input'));
+      field(id).form!.dispatchEvent(new Event('submit', { cancelable: true }));
+      await fixture.whenStable();
+    }
+
+    const matches = (...found: [number, number, number][]): DocumentMatches => ({
+      document_id: 'doc-1',
+      query: 'supplier',
+      searched_for: ['supplier'],
+      total: found.length,
+      truncated: false,
+      all_words: true,
+      matches: found.map(([chunk_id, ordinal, pageNumber]) => ({
+        chunk_id,
+        ordinal,
+        page: pageNumber,
+        line_start: null,
+        line_end: null,
+        highlights: [[16, 25]],
+      })),
+    });
+
+    it('jumps to a page and marks where it starts', async () => {
+      await openLong();
+
+      await submit('goto-page', '77');
+      const request = http.expectOne((r) => r.url === '/api/documents/doc-1/chunks');
+      expect(request.request.params.get('page')).toBe('77');
+      request.flush(windowFrom(190, 77));
+      await fixture.whenStable();
+
+      expect(page.querySelector('.page-divider')?.textContent?.trim()).toBe('Page 77');
+      expect(page.querySelector('#chunk-1190')?.classList).toContain('current');
+      expect(text()).toContain('Show earlier text');
+    });
+
+    it('refuses a page outside the document without asking the server', async () => {
+      await openLong();
+
+      await submit('goto-page', '121');
+
+      expect(text()).toContain('Enter a page from 1 to 120.');
+      http.expectNone((r) => r.url.includes('/chunks'));
+    });
+
+    it('finds the words, marks them, and steps to a match outside the loaded text', async () => {
+      await openLong();
+
+      await submit('find-in-document', 'supplier');
+      const find = http.expectOne((r) => r.url === '/api/documents/doc-1/matches');
+      expect(find.request.params.get('q')).toBe('supplier');
+      find.flush(matches([1003, 3, 1], [1250, 250, 100]));
+      await fixture.whenStable();
+
+      expect(page.querySelector('.match-count')?.textContent).toBe('1 of 2');
+      expect(page.querySelector('#chunk-1003 mark')?.textContent).toBe('suppliers');
+      expect(page.querySelector('#chunk-1003')?.classList).toContain('current');
+
+      page.querySelector<HTMLButtonElement>('[aria-label="Next match"]')!.click();
+      await fixture.whenStable();
+      const load = http.expectOne((r) => r.url === '/api/documents/doc-1/chunks');
+      expect(load.request.params.get('offset')).toBe('245'); // a little context before it
+      load.flush(windowFrom(245, 100));
+      await fixture.whenStable();
+
+      expect(page.querySelector('.match-count')?.textContent).toBe('2 of 2');
+      expect(page.querySelector('#chunk-1250')?.classList).toContain('current');
+
+      page.querySelector<HTMLButtonElement>('[aria-label="Next match"]')!.click();
+      await fixture.whenStable();
+      http.expectOne((r) => r.url === '/api/documents/doc-1/chunks').flush(windowFrom(0));
+      await fixture.whenStable();
+      expect(page.querySelector('.match-count')?.textContent).toBe('1 of 2'); // wraps around
+    });
+
+    it('says so when nothing matches', async () => {
+      await openLong();
+
+      await submit('find-in-document', 'unicorn');
+      http.expectOne((r) => r.url === '/api/documents/doc-1/matches').flush(matches());
+      await fixture.whenStable();
+
+      expect(page.querySelector('.match-count')?.textContent).toBe('No matches');
+    });
+
+    it('finds the words of the search that opened the document', async () => {
+      await openLong('supplier');
+
+      expect(field('find-in-document').value).toBe('supplier');
+      http.expectOne((r) => r.url === '/api/documents/doc-1/matches').flush(matches([1004, 4, 1]));
+      await fixture.whenStable();
+
+      expect(page.querySelector('.match-count')?.textContent).toBe('1 of 1');
+    });
+
+    it('shows the original page with the current passage outlined', async () => {
+      await openLong();
+      await submit('find-in-document', 'supplier');
+      http.expectOne((r) => r.url === '/api/documents/doc-1/matches').flush(matches([1003, 3, 1]));
+      await fixture.whenStable();
+
+      page.querySelector<HTMLButtonElement>('.original-toggle')!.click();
+      await fixture.whenStable();
+      await new Promise((resolve) => setTimeout(resolve)); // let the render promise settle
+      await fixture.whenStable();
+
+      expect(renderer.calls.at(-1)).toEqual({
+        url: '/api/documents/doc-1/file',
+        page: 1,
+        passage: 'Passage 3 about suppliers',
+      });
+      expect(page.querySelector('.original-title')?.textContent?.trim()).toBe(
+        'Original · page 1 of 120',
+      );
+      expect(page.querySelectorAll('.passage-box')).toHaveLength(1);
+      expect(page.querySelector('canvas')?.getAttribute('aria-label')).toContain('as printed');
+
+      page.querySelector<HTMLButtonElement>('[aria-label="Next page"]')!.click();
+      await fixture.whenStable();
+      expect(renderer.calls.at(-1)?.page).toBe(2);
+    });
+
+    it('explains when a page cannot be shown', async () => {
+      renderer.result = new Error('broken');
+      await openLong();
+
+      page.querySelector<HTMLButtonElement>('.original-toggle')!.click();
+      await fixture.whenStable();
+      await new Promise((resolve) => setTimeout(resolve));
+      await fixture.whenStable();
+
+      expect(text()).toContain('This page could not be shown.');
+    });
+
+    it('offers the original page only for PDFs', async () => {
+      await open('doc-2');
+      http
+        .expectOne('/api/documents/doc-2')
+        .flush(makeDocument({ id: 'doc-2', file_type: 'txt', page_count: null }));
+      http
+        .expectOne((r) => r.url === '/api/documents/doc-2/chunks')
+        .flush({
+          document_id: 'doc-2',
+          total: 1,
+          offset: 0,
+          limit: 60,
+          items: [chunk(1, 0, null)],
+        });
+      await fixture.whenStable();
+
+      expect(page.querySelector('.original-toggle')).toBeNull();
+      expect(page.querySelector('#goto-page')).toBeNull();
+      expect(page.querySelector('#find-in-document')).not.toBeNull();
+    });
   });
 });

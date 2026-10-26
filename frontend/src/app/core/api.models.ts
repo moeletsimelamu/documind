@@ -46,6 +46,28 @@ export interface ChunkPage {
   items: Chunk[];
 }
 
+/** A passage of one document that contains the words searched for, in reading order. */
+export interface DocumentMatch {
+  chunk_id: number;
+  ordinal: number;
+  page: number | null;
+  line_start: number | null;
+  line_end: number | null;
+  /** [start, end) offsets into the passage's full text. */
+  highlights: Span[];
+}
+
+export interface DocumentMatches {
+  document_id: string;
+  query: string;
+  searched_for: string[];
+  total: number;
+  truncated: boolean;
+  /** False when no passage had every word, so passages with any of them are listed. */
+  all_words: boolean;
+  matches: DocumentMatch[];
+}
+
 export interface ChunkDetail extends Chunk {
   document_id: string;
   document_name: string;

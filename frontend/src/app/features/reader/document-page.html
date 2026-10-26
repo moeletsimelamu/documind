@@ -56,12 +56,101 @@
       }
       @case ('ready') {
         <p class="note subtle">
-          Extracted text, as DocuMind indexed it. Layout, images and tables from the original are
-          not shown — download the original to see them.
+          Extracted text, as DocuMind indexed it.
+          @if (isPdf()) {
+            Use “Original page” to see a page as it is printed, with its layout, images and tables.
+          } @else {
+            Download the original to see its formatting.
+          }
           @if (doc.empty_page_count) {
             {{ plural(doc.empty_page_count, 'page') }} had no extractable text.
           }
         </p>
+
+        <div class="toolbar">
+          @if (isPdf()) {
+            <form class="goto" (submit)="goToPage($event)">
+              <label for="goto-page">Page</label>
+              <input
+                id="goto-page"
+                class="input"
+                type="number"
+                inputmode="numeric"
+                min="1"
+                [max]="pageCount()"
+                [value]="pageDraft()"
+                (input)="pageDraft.set($any($event.target).value)"
+                [attr.aria-describedby]="pageError() ? 'goto-error' : null"
+              />
+              <span class="subtle tabular">of {{ pageCount() }}</span>
+              <button type="submit" class="btn">Go</button>
+            </form>
+          }
+          <form class="find" role="search" (submit)="find($event)">
+            <label for="find-in-document" class="visually-hidden">Find in this document</label>
+            <input
+              id="find-in-document"
+              class="input"
+              type="search"
+              placeholder="Find in this document"
+              maxlength="300"
+              autocomplete="off"
+              [value]="findDraft()"
+              (input)="findDraft.set($any($event.target).value)"
+            />
+            <button type="submit" class="btn" [disabled]="finding()">
+              @if (finding()) {
+                <span class="spinner" aria-hidden="true"></span>
+              }
+              Find
+            </button>
+            @if (matches(); as result) {
+              <span class="match-count tabular" role="status">{{ matchLabel() }}</span>
+              <button
+                type="button"
+                class="btn icon-btn"
+                aria-label="Previous match"
+                (click)="step(-1)"
+                [disabled]="result.matches.length < 2"
+              >
+                <dm-icon name="chevron-up" />
+              </button>
+              <button
+                type="button"
+                class="btn icon-btn"
+                aria-label="Next match"
+                (click)="step(1)"
+                [disabled]="result.matches.length < 2"
+              >
+                <dm-icon name="chevron-down" />
+              </button>
+              <button
+                type="button"
+                class="btn btn-quiet icon-btn"
+                aria-label="Clear find"
+                (click)="clearFind()"
+              >
+                <dm-icon name="close" />
+              </button>
+            }
+          </form>
+          @if (isPdf()) {
+            <button
+              type="button"
+              class="btn original-toggle"
+              [attr.aria-pressed]="originalOpen()"
+              (click)="toggleOriginal()"
+            >
+              <dm-icon name="page" /> Original page
+            </button>
+          }
+        </div>
+        @if (pageError(); as error) {
+          <p id="goto-error" class="field-error toolbar-note" role="status">{{ error }}</p>
+        }
+        @if (findError(); as error) {
+          <p class="field-error toolbar-note" role="status">{{ error }}</p>
+        }
 
         @if (textError(); as error) {
           <div class="banner banner-error" role="alert">
@@ -70,60 +159,155 @@
           </div>
         }
 
-        @if (loadingText()) {
-          <div class="reader" aria-busy="true" aria-label="Loading text">
-            <div class="skeleton" style="width: 90%"></div>
-            <div class="skeleton" style="width: 84%"></div>
-            <div class="skeleton" style="width: 88%"></div>
-            <div class="skeleton" style="width: 60%"></div>
-          </div>
-        } @else {
-          <article class="reader" aria-label="Document text">
-            @if (hasEarlier()) {
-              <button
-                type="button"
-                class="btn more"
-                (click)="showEarlier()"
-                [disabled]="loadingMore() !== null"
-              >
-                @if (loadingMore() === 'earlier') {
-                  <span class="spinner" aria-hidden="true"></span>
-                }
-                Show earlier text
-              </button>
-            }
-            @for (passage of chunks(); track passage.id; let i = $index) {
-              @if (showsPageDivider(i)) {
-                <h2 class="page-divider">Page {{ passage.page }}</h2>
+        <div class="reading" [class.with-original]="originalOpen()">
+          @if (loadingText()) {
+            <div class="reader" aria-busy="true" aria-label="Loading text">
+              <div class="skeleton" style="width: 90%"></div>
+              <div class="skeleton" style="width: 84%"></div>
+              <div class="skeleton" style="width: 88%"></div>
+              <div class="skeleton" style="width: 60%"></div>
+            </div>
+          } @else {
+            <article class="reader" aria-label="Document text">
+              @if (hasEarlier()) {
+                <button
+                  type="button"
+                  class="btn more"
+                  (click)="showEarlier()"
+                  [disabled]="loadingMore() !== null"
+                >
+                  @if (loadingMore() === 'earlier') {
+                    <span class="spinner" aria-hidden="true"></span>
+                  }
+                  Show earlier text
+                </button>
               }
-              <section
-                class="passage"
-                [id]="'chunk-' + passage.id"
-                tabindex="-1"
-                [class.target]="passage.id === targetId()"
-                [attr.aria-label]="passage.id === targetId() ? 'Passage you opened' : null"
-              >
-                @if (passage.line_start !== null) {
-                  <p class="lines tabular">{{ locationLabel(passage) }}</p>
+              @for (passage of chunks(); track passage.id; let i = $index) {
+                @if (showsPageDivider(i)) {
+                  <div class="page-head">
+                    <h2 class="page-divider">Page {{ passage.page }}</h2>
+                    @if (isPdf()) {
+                      <button
+                        type="button"
+                        class="view-page"
+                        (click)="viewOriginal(passage.page!)"
+                        [attr.aria-label]="'View original page ' + passage.page"
+                      >
+                        View original
+                      </button>
+                    }
+                  </div>
                 }
-                <div class="source-text">{{ passage.text }}</div>
-              </section>
-            }
-            @if (hasLater()) {
-              <button
-                type="button"
-                class="btn more"
-                (click)="showLater()"
-                [disabled]="loadingMore() !== null"
+                <section
+                  class="passage"
+                  [id]="'chunk-' + passage.id"
+                  tabindex="-1"
+                  [class.target]="passage.id === targetId()"
+                  [class.current]="passage.id === currentId() && passage.id !== targetId()"
+                  [attr.aria-label]="passage.id === targetId() ? 'Passage you opened' : null"
+                >
+                  @if (passage.line_start !== null) {
+                    <p class="lines tabular">{{ locationLabel(passage) }}</p>
+                  }
+                  <dm-marked-text
+                    [text]="passage.text"
+                    [highlights]="highlightsById().get(passage.id) ?? []"
+                  />
+                </section>
+              }
+              @if (hasLater()) {
+                <button
+                  type="button"
+                  class="btn more"
+                  (click)="showLater()"
+                  [disabled]="loadingMore() !== null"
+                >
+                  @if (loadingMore() === 'later') {
+                    <span class="spinner" aria-hidden="true"></span>
+                  }
+                  Show more text
+                </button>
+              }
+            </article>
+          }
+
+          @if (originalOpen()) {
+            <aside class="original" aria-labelledby="original-heading">
+              <div class="original-head">
+                <h2 id="original-heading" class="original-title tabular">
+                  Original · page {{ viewedPage() }} of {{ pageCount() }}
+                </h2>
+                <button
+                  type="button"
+                  class="btn icon-btn"
+                  aria-label="Previous page"
+                  (click)="turnPage(-1)"
+                  [disabled]="viewedPage() <= 1"
+                >
+                  <dm-icon name="chevron-left" />
+                </button>
+                <button
+                  type="button"
+                  class="btn icon-btn"
+                  aria-label="Next page"
+                  (click)="turnPage(1)"
+                  [disabled]="viewedPage() >= pageCount()"
+                >
+                  <dm-icon name="chevron-right" />
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-quiet icon-btn"
+                  aria-label="Close original page"
+                  (click)="toggleOriginal()"
+                >
+                  <dm-icon name="close" />
+                </button>
+              </div>
+              @if (renderError(); as error) {
+                <div class="banner banner-warning" role="status">
+                  <dm-icon name="alert" />
+                  <p>{{ error }}</p>
+                </div>
+              }
+              <div
+                #pageFrame
+                class="page-frame"
+                [class.busy]="rendering()"
+                [style.height.px]="frameHeight()"
+                [attr.aria-busy]="rendering()"
               >
-                @if (loadingMore() === 'later') {
-                  <span class="spinner" aria-hidden="true"></span>
+                <canvas
+                  #pageCanvas
+                  role="img"
+                  [attr.aria-label]="
+                    'Page ' +
+                    viewedPage() +
+                    ' of ' +
+                    doc.name +
+                    ', as printed. Its text is in the reader.'
+                  "
+                ></canvas>
+                @for (box of passageBoxes(); track $index) {
+                  <div
+                    class="passage-box"
+                    aria-hidden="true"
+                    [style.left.px]="box.left"
+                    [style.top.px]="box.top"
+                    [style.width.px]="box.width"
+                    [style.height.px]="box.height"
+                  ></div>
                 }
-                Show more text
-              </button>
-            }
-          </article>
-        }
+              </div>
+              @if (passageBoxes().length) {
+                <p class="subtle original-note">
+                  Outlined: where the passage you are reading appears on this page, found by its
+                  words.
+                </p>
+              }
+            </aside>
+          }
+        </div>
       }
     }
   } @else {

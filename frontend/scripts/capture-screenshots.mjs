@@ -65,6 +65,10 @@ await shoot('reader', tall, async (page) => {
     .first()
     .click();
   await page.locator('.passage.target').waitFor();
+  // The original page beside the text, with the opened passage outlined on it.
+  await page.getByRole('button', { name: 'Original page', exact: true }).click();
+  await page.locator('.page-frame[aria-busy="false"]').waitFor();
+  await page.locator('.passage-box').first().waitFor();
   await page.evaluate(() => window.scrollTo(0, 0)); // header and the opened passage together
 });
 

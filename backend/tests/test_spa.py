@@ -56,6 +56,23 @@ def test_unhashed_files_are_revalidated(client: TestClient) -> None:
     assert client.get("/favicon.svg").headers["cache-control"] == "no-cache"
 
 
+def test_scripts_are_served_as_javascript_whatever_the_os_table_says(
+    client: TestClient, static_dir: Path
+) -> None:
+    # Windows maps .mjs to text/plain; a module worker served that way is refused by browsers.
+    (static_dir / "pdfjs").mkdir()
+    (static_dir / "pdfjs" / "pdf.worker.min.mjs").write_text("export {}", encoding="utf-8")
+    (static_dir / "pdfjs" / "decoder.wasm").write_bytes(b"\0asm")
+
+    assert (
+        client.get("/pdfjs/pdf.worker.min.mjs")
+        .headers["content-type"]
+        .startswith("text/javascript")
+    )
+    assert client.get("/main-35JR6M3P.js").headers["content-type"].startswith("text/javascript")
+    assert client.get("/pdfjs/decoder.wasm").headers["content-type"] == "application/wasm"
+
+
 def test_missing_assets_are_404_not_the_app_shell(client: TestClient) -> None:
     response = client.get("/chunk-MISSING1.js")
 

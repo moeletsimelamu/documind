@@ -15,6 +15,9 @@ their contents, and ask questions whose answers always point back to the exact p
 - **Searches it.** Keyword search (SQLite FTS5, BM25 ranking) with stemming, so "delays" also finds
   "delayed". Each result shows its document and page, highlights the sentence that best matches,
   and opens the document at the passage.
+- **Lets you read and check the source.** The reader opens at the passage, finds your words again
+  through the whole document (next/previous match), jumps to any page, and shows the original PDF
+  page as printed — tables and figures included — with the passage you are reading outlined on it.
 - **Answers questions with sources.** Questions and answers form a thread beside a panel showing
   the sources of the selected answer. Without an AI model, an answer is the closest sentence,
   quoted, with the most relevant passages numbered S1, S2… With an OpenAI-compatible model
@@ -25,7 +28,7 @@ their contents, and ask questions whose answers always point back to the exact p
 
 | Search | Reader | Ask (no AI model) |
 |---|---|---|
-| ![Search results with highlighted matches](docs/screenshots/search.png) | ![The reader opened at a highlighted passage on page 2](docs/screenshots/reader.png) | ![An answer made of numbered source passages](docs/screenshots/ask.png) |
+| ![Search results with the best-matching sentence highlighted](docs/screenshots/search.png) | ![The reader at a passage on page 2, beside the original page with the passage outlined](docs/screenshots/reader.png) | ![An answer made of numbered source passages](docs/screenshots/ask.png) |
 
 These screenshots use fictional documents with AI answers off (how they were made:
 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#6-screenshots)). The layout also works at phone width —
@@ -102,10 +105,10 @@ only the model name. Everything else works without it.
 
 | Suite | What it covers | Result (2026-10-26) |
 |---|---|---|
-| Backend — pytest | API, validation, extraction (generated valid, corrupt, encrypted, image-only and fake PDFs), PDF layout clean-up, chunking, search, answer grounding with fake providers, middleware, SPA serving | 304 passed on Windows; 3 more (memory limit) run only on Linux/macOS |
+| Backend — pytest | API, validation, extraction (generated valid, corrupt, encrypted, image-only and fake PDFs), PDF layout clean-up, chunking, search, answer grounding with fake providers, middleware, SPA serving | 309 passed on Windows; 3 more (memory limit) run only on Linux/macOS |
 | Backend — ruff, mypy (strict) | Lint, formatting, types | clean |
-| Frontend — Vitest | Services and components, driven through the DOM | 78 passed |
-| End to end — Playwright | 8 complete workflows against the production build, and an axe accessibility audit of 6 page states | 14 passed, 0 accessibility violations |
+| Frontend — Vitest | Services and components, driven through the DOM | 89 passed |
+| End to end — Playwright | 9 complete workflows against the production build (including pdf.js drawing an uploaded PDF), and an axe accessibility audit of 7 page states | 16 passed, 0 accessibility violations |
 | Retrieval evaluation | 30 questions over fictional documents | hit@5: 100% for keyword questions, 56% for paraphrases ([ARCHITECTURE.md §7](docs/ARCHITECTURE.md#evaluation)) |
 | Real documents | Three public PDFs (a 129-page NIST standard, a 76-page HR guide, a two-column research paper), 11 natural questions judged by hand | processed in 1.7–6.4 s each; answer passage in the top 5 for 9 of 11 questions |
 | Real AI model | Llama 3.2 (3B) on a laptop CPU, the same 11 questions plus an unanswerable one and a request to ignore the documents, each answer checked against its sources | 4 correct, 3 partly right, 2 wrongly declined, 1 unhelpful, 1 wrong with a real citation; both control questions declined; 26–42 s per answer ([ARCHITECTURE.md §9](docs/ARCHITECTURE.md#9-question-answering)) |

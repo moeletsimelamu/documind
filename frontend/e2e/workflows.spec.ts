@@ -116,6 +116,44 @@ test('searches from the top bar and opens a result at its passage', async ({ pag
   await expect(target).toBeFocused();
 });
 
+test('finds the search words again, shows the original page and jumps between pages', async ({
+  page,
+}) => {
+  await page.goto('/search?q=Lumen%20Systems');
+  await page
+    .locator('dm-passage-card')
+    .first()
+    .getByRole('link', { name: /at this passage/ })
+    .click();
+
+  // The words that led here are found again in the document.
+  await expect(page.getByLabel('Find in this document')).toHaveValue('Lumen Systems');
+  await expect(page.locator('.match-count')).toHaveText(/^1 of \d+$/);
+  await expect(page.locator('.reader mark').first()).toHaveText(/Lumen|Systems/);
+
+  // The original page, drawn by pdf.js from the uploaded file, with the passage outlined.
+  await page.getByRole('button', { name: 'Original page', exact: true }).click();
+  await expect(page.locator('.original-title')).toHaveText('Original · page 2 of 2');
+  await expect(page.locator('.page-frame')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('.passage-box').first()).toBeVisible();
+  const inked = await page.locator('.page-frame canvas').evaluate((canvas: HTMLCanvasElement) => {
+    const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+    let dark = 0;
+    for (let i = 0; i < pixels.length; i += 4) {
+      if (pixels[i] < 128) dark++;
+    }
+    return dark;
+  });
+  expect(inked, 'dark pixels: the page has text drawn on it').toBeGreaterThan(500);
+
+  // Go to page 1: the text and the original page both follow.
+  await page.getByLabel('Page', { exact: true }).fill('1');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.locator('.page-divider').first()).toHaveText('Page 1');
+  await expect(page.locator('.original-title')).toHaveText('Original · page 1 of 2');
+  await expect(page.locator('.page-frame')).toHaveAttribute('aria-busy', 'false');
+});
+
 test('a document link still works after a full page reload', async ({ page }) => {
   await page.goto('/library');
   await page.getByRole('link', { name: 'falcon-steering-minutes.pdf', exact: true }).click();

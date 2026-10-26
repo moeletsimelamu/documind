@@ -11,6 +11,33 @@ test.describe.configure({ mode: 'serial' });
 
 const WCAG = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 let documentId = '';
+let pdfId = '';
+
+/** A one-page PDF with a line of Helvetica text (a standard font pdf.js loads from the site). */
+function onePagePdf(line: string): Buffer {
+  const nl = String.fromCharCode(10);
+  const stream = `BT /F1 14 Tf 72 720 Td (${line}) Tj ET`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] ' +
+      '/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    [`<< /Length ${stream.length} >>`, 'stream', stream, 'endstream'].join(nl),
+  ];
+  let body = '%PDF-1.4' + nl;
+  const offsets: number[] = [];
+  objects.forEach((object, i) => {
+    offsets.push(body.length);
+    body += [`${i + 1} 0 obj`, object, 'endobj', ''].join(nl);
+  });
+  const xref = body.length;
+  const entries = offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n `);
+  body += ['xref', `0 ${objects.length + 1}`, '0000000000 65535 f ', ...entries, ''].join(nl);
+  body += ['trailer', `<< /Size ${objects.length + 1} /Root 1 0 R >>`, 'startxref'].join(nl);
+  body += [nl + String(xref), '%%EOF', ''].join(nl);
+  return Buffer.from(body, 'latin1');
+}
 
 async function audit(page: Page): Promise<void> {
   const results = await new AxeBuilder({ page }).withTags(WCAG).analyze();
@@ -34,14 +61,27 @@ test.beforeAll(async ({ request }) => {
   });
   expect(response.status()).toBe(202);
   documentId = (await response.json()).id;
-  await expect
-    .poll(async () => (await (await request.get(`/api/documents/${documentId}`)).json()).status)
-    .toBe('ready');
+  const pdf = await request.post('/api/documents', {
+    multipart: {
+      file: {
+        name: 'accessibility-dock.pdf',
+        mimeType: 'application/pdf',
+        buffer: onePagePdf('The loading dock inspection found two blocked doorways.'),
+      },
+    },
+  });
+  expect(pdf.status()).toBe(202);
+  pdfId = (await pdf.json()).id;
+  for (const id of [documentId, pdfId]) {
+    await expect
+      .poll(async () => (await (await request.get(`/api/documents/${id}`)).json()).status)
+      .toBe('ready');
+  }
 });
 
 test.afterAll(async ({ request }) => {
-  if (documentId) {
-    await request.delete(`/api/documents/${documentId}`);
+  for (const id of [documentId, pdfId].filter(Boolean)) {
+    await request.delete(`/api/documents/${id}`);
   }
 });
 
@@ -66,6 +106,15 @@ test('document reader opened at a passage', async ({ page }) => {
     .first()
     .click();
   await expect(page.locator('.passage.target')).toBeVisible();
+  await audit(page);
+});
+
+test('PDF reader with find and the original page open', async ({ page }) => {
+  await page.goto(`/documents/${pdfId}?q=blocked%20doorways`);
+  await expect(page.locator('.match-count')).toHaveText('1 of 1');
+  await page.getByRole('button', { name: 'Original page', exact: true }).click();
+  await expect(page.locator('.page-frame')).toHaveAttribute('aria-busy', 'false');
+  await expect(page.locator('.passage-box').first()).toBeVisible();
   await audit(page);
 });
 

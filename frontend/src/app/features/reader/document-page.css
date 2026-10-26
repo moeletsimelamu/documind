@@ -53,8 +53,20 @@ h1 {
   background: var(--surface);
 }
 
-.page-divider {
+.page-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
   margin: var(--space-5) 0 var(--space-3);
+}
+
+.reader > .page-head:first-child,
+.reader > .more + .page-head {
+  margin-top: 0;
+}
+
+.page-divider {
+  margin: 0;
   color: var(--ink-subtle);
   font-size: var(--text-xs);
   font-variant: small-caps;
@@ -62,8 +74,101 @@ h1 {
   text-transform: lowercase;
 }
 
-.page-divider:first-of-type {
-  margin-top: 0;
+.view-page {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.view-page:hover {
+  text-decoration: underline;
+}
+
+/* Toolbar: go to page, find, original page. Stays in view while reading. */
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  margin: 0 calc(-1 * var(--space-2)) var(--space-3);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--line);
+  background: var(--desk);
+}
+
+.goto,
+.find {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.goto label {
+  font-weight: 600;
+}
+
+.goto .input {
+  width: 5.5em;
+}
+
+.find {
+  flex: 1 1 320px;
+}
+
+.find .input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.match-count {
+  color: var(--ink-muted);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.icon-btn {
+  padding-inline: var(--space-2);
+}
+
+.original-toggle[aria-pressed='true'] {
+  border-color: var(--source-rule);
+  background: var(--warning-soft);
+}
+
+.toolbar-note {
+  margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+}
+
+/* Text beside the original page on wide screens; the page comes first on narrow ones. */
+.reading {
+  display: grid;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.reading.with-original {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 1100px) {
+  .reading.with-original {
+    grid-template-columns: minmax(0, calc(var(--measure) + 2 * var(--space-6))) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1099px) {
+  .reading.with-original .original {
+    order: -1;
+  }
 }
 
 .passage {
@@ -82,8 +187,75 @@ h1 {
   background: #fff8d6;
 }
 
-.passage.target:focus-visible {
+.passage.target:focus-visible,
+.passage.current:focus-visible {
   outline: 2px solid var(--accent);
+}
+
+/* The match or page the reader moved to: a rule only, so the opened passage stays distinct. */
+.passage.current {
+  border-left-color: var(--line-strong);
+}
+
+/* The original page ------------------------------------------------------------------------ */
+
+.original {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+@media (min-width: 1100px) {
+  .original {
+    position: sticky;
+    top: 64px;
+    max-height: calc(100vh - 80px);
+    overflow-y: auto;
+  }
+}
+
+.original-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+
+.original-title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.page-frame {
+  position: relative;
+  width: 100%;
+  min-height: 200px;
+  background: var(--desk);
+  box-shadow: 0 1px 3px rgb(22 32 54 / 18%);
+}
+
+.page-frame.busy {
+  opacity: 0.6;
+}
+
+.page-frame canvas {
+  display: block;
+}
+
+.passage-box {
+  position: absolute;
+  border-bottom: 2px solid var(--source-rule);
+  background: rgb(255 230 128 / 45%);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.original-note {
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
 }
 
 .lines {
@@ -104,5 +276,10 @@ h1 {
 @media (max-width: 639px) {
   .reader {
     padding: var(--space-4);
+  }
+
+  /* On a phone the wrapped toolbar would cover a third of the screen: let it scroll away. */
+  .toolbar {
+    position: static;
   }
 }

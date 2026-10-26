@@ -2,17 +2,26 @@
 
 import logging
 import uuid
+from http import HTTPStatus
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 
+from documind import retrieval
 from documind.api.deps import ProcessorDep, SessionDep, SettingsDep, StorageDep
-from documind.errors import NotFoundError
+from documind.errors import AppError, NotFoundError
 from documind.ingestion.pipeline import accept_upload
 from documind.models import Chunk, Document, DocumentStatus
-from documind.schemas import ChunkOut, ChunkPage, DocumentOut, ErrorResponse
+from documind.schemas import (
+    ChunkOut,
+    ChunkPage,
+    DocumentMatchesOut,
+    DocumentMatchOut,
+    DocumentOut,
+    ErrorResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -91,12 +100,35 @@ def list_chunks(
     document_id: uuid.UUID,
     offset: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    page: Annotated[
+        int | None,
+        Query(
+            ge=1,
+            description="Start at this PDF page instead of at offset (or the next page "
+            "with text, if it has none)",
+        ),
+    ] = None,
 ) -> ChunkPage:
     """The extracted text of a document, in order, as indexed chunks."""
     document = _get_document(session, document_id)
-    total = session.scalar(
-        select(func.count()).select_from(Chunk).where(Chunk.document_id == document.id)
+    total = (
+        session.scalar(
+            select(func.count()).select_from(Chunk).where(Chunk.document_id == document.id)
+        )
+        or 0
     )
+    if page is not None:
+        # Pages only increase with the ordinal, so the passages before page N are those with a
+        # lower page number. Past the last page, the last passage is returned.
+        before = (
+            session.scalar(
+                select(func.count())
+                .select_from(Chunk)
+                .where(Chunk.document_id == document.id, Chunk.page < page)
+            )
+            or 0
+        )
+        offset = min(before, max(total - 1, 0))
     chunks = session.scalars(
         select(Chunk)
         .where(Chunk.document_id == document.id)
@@ -106,10 +138,59 @@ def list_chunks(
     )
     return ChunkPage(
         document_id=document.id,
-        total=total or 0,
+        total=total,
         offset=offset,
         limit=limit,
         items=[ChunkOut.model_validate(chunk) for chunk in chunks],
+    )
+
+
+MAX_DOCUMENT_MATCHES = 500
+
+
+@router.get(
+    "/{document_id}/matches",
+    response_model=DocumentMatchesOut,
+    responses={404: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+)
+def find_in_document(
+    session: SessionDep,
+    settings: SettingsDep,
+    document_id: uuid.UUID,
+    q: Annotated[str, Query(description="Words to find; use quotes for a phrase")],
+) -> DocumentMatchesOut:
+    """Every passage of the document containing the words, in reading order, for "find next"."""
+    document = _get_document(session, document_id)
+    if len(q) > settings.max_query_chars:
+        raise AppError(
+            f"Search queries can be at most {settings.max_query_chars} characters.",
+            code="query_too_long",
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+        )
+    try:
+        result = retrieval.find_in_document(session, document.id, q, limit=MAX_DOCUMENT_MATCHES)
+    except retrieval.EmptyQueryError as exc:
+        raise AppError(
+            str(exc), code="empty_query", status_code=HTTPStatus.UNPROCESSABLE_ENTITY
+        ) from exc
+    return DocumentMatchesOut(
+        document_id=document.id,
+        query=q,
+        searched_for=result.query.searched_for,
+        total=result.total,
+        truncated=result.total > len(result.matches),
+        all_words=result.all_words,
+        matches=[
+            DocumentMatchOut(
+                chunk_id=m.chunk_id,
+                ordinal=m.ordinal,
+                page=m.page,
+                line_start=m.line_start,
+                line_end=m.line_end,
+                highlights=m.highlights,
+            )
+            for m in result.matches
+        ],
     )
 
 

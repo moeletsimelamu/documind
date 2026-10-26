@@ -17,6 +17,14 @@ from documind.errors import NotFoundError
 # Angular adds a content hash to bundle file names (main-35JR6M3P.js), so they never change.
 _HASHED_NAME = re.compile(r"-[A-Z0-9]{8}\.[a-z0-9]+$")
 _IMMUTABLE = "public, max-age=31536000, immutable"
+# Types that must not depend on the operating system's table: Windows maps .mjs to text/plain,
+# and browsers refuse a module script (the PDF viewer's worker) served as text/plain with nosniff.
+_MEDIA_TYPES = {
+    ".js": "text/javascript",
+    ".mjs": "text/javascript",
+    ".css": "text/css",
+    ".wasm": "application/wasm",
+}
 
 
 def register_spa(app: FastAPI, static_dir: Path) -> None:
@@ -33,7 +41,11 @@ def register_spa(app: FastAPI, static_dir: Path) -> None:
             candidate = (root / path).resolve()
             if candidate.is_relative_to(root) and candidate.is_file():
                 cache = _IMMUTABLE if _HASHED_NAME.search(candidate.name) else "no-cache"
-                return FileResponse(candidate, headers={"Cache-Control": cache})
+                return FileResponse(
+                    candidate,
+                    media_type=_MEDIA_TYPES.get(candidate.suffix.lower()),
+                    headers={"Cache-Control": cache},
+                )
             if "." in PurePosixPath(path).name:
                 # A missing asset is a 404, not the app shell served under a .js or .css name.
                 raise HTTPException(404)

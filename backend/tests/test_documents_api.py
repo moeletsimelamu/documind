@@ -377,6 +377,80 @@ def test_chunks_are_paginated_in_document_order(client: TestClient) -> None:
     assert too_many.status_code == 422
 
 
+def test_chunks_can_start_at_a_pdf_page(client: TestClient) -> None:
+    # Page 3 has no text: asking for it opens at page 4, the next page that has some.
+    pages = [
+        paragraph("intro"),
+        paragraph("pricing"),
+        None,
+        paragraph("staffing"),
+        paragraph("end"),
+    ]
+    document = uploaded(client, "pages.pdf", make_pdf(pages))
+    url = f"/api/documents/{document['id']}/chunks"
+
+    page_two = client.get(url, params={"page": 2, "limit": 1}).json()
+    empty_page = client.get(url, params={"page": 3, "limit": 1}).json()
+    past_end = client.get(url, params={"page": 99, "limit": 5}).json()
+
+    assert page_two["items"][0]["page"] == 2
+    assert page_two["offset"] == page_two["items"][0]["ordinal"]
+    assert empty_page["items"][0]["page"] == 4
+    assert [item["page"] for item in past_end["items"]] == [5]  # the last passage
+    assert client.get(url, params={"page": 0}).status_code == 422
+
+
+def test_find_in_document_lists_matches_in_reading_order_with_highlights(
+    client: TestClient,
+) -> None:
+    pages = [paragraph("pricing"), paragraph("supplier delays"), paragraph("supplier costs")]
+    document = uploaded(client, "find.pdf", make_pdf(pages))
+    uploaded(client, "other.txt", b"Supplier delays elsewhere must not be listed.")
+    url = f"/api/documents/{document['id']}/matches"
+
+    result = client.get(url, params={"q": "the supplier"}).json()
+    chunks = {
+        c["id"]: c["text"]
+        for c in client.get(f"/api/documents/{document['id']}/chunks").json()["items"]
+    }
+
+    assert result["searched_for"] == ["supplier"]
+    assert [m["page"] for m in result["matches"]] == [2, 3]
+    assert result["total"] == 2 and result["truncated"] is False
+    for match in result["matches"]:
+        text_ = chunks[match["chunk_id"]]
+        assert {text_[s:e].lower() for s, e in match["highlights"]} == {"supplier"}
+
+
+def test_find_in_document_wants_all_words_and_falls_back_to_any(client: TestClient) -> None:
+    pages = [paragraph("pricing"), paragraph("supplier delays"), paragraph("supplier costs")]
+    document = uploaded(client, "words.pdf", make_pdf(pages))
+    url = f"/api/documents/{document['id']}/matches"
+
+    both = client.get(url, params={"q": "supplier costs"}).json()
+    neither = client.get(url, params={"q": "supplier unicorn"}).json()
+
+    assert [m["page"] for m in both["matches"]] == [3]  # not every passage with "supplier"
+    assert both["all_words"] is True
+    assert [m["page"] for m in neither["matches"]] == [2, 3]  # no page has both: any one counts
+    assert neither["all_words"] is False
+
+
+def test_find_in_document_rejects_empty_and_too_long_queries(client: TestClient) -> None:
+    document = uploaded(client, "notes.txt", TXT_BODY.encode())
+    url = f"/api/documents/{document['id']}/matches"
+
+    assert client.get(url, params={"q": "  "}).json()["error"]["code"] == "empty_query"
+    assert client.get(url, params={"q": "x" * 301}).json()["error"]["code"] == "query_too_long"
+    assert client.get(url, params={"q": 'NEAR(budget) "falcon'}).status_code == 200  # inert
+    assert (
+        client.get(
+            "/api/documents/00000000-0000-0000-0000-000000000000/matches", params={"q": "x"}
+        ).status_code
+        == 404
+    )
+
+
 def test_original_file_downloads_as_an_attachment(client: TestClient) -> None:
     data = make_pdf([paragraph("download")])
     document = uploaded(client, "Résumé 2026.pdf", data)

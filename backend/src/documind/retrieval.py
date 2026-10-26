@@ -43,11 +43,19 @@ class ParsedQuery:
     terms: list[str]
     phrases: list[list[str]]
 
-    def match_expression(self) -> str:
-        """An FTS5 MATCH expression where every term and phrase is a quoted string."""
+    def match_expression(self, *, require_all: bool = False) -> str:
+        """An FTS5 MATCH expression where every term and phrase is a quoted string.
+
+        Any of them matches by default (ranking then favours passages with more); with
+        ``require_all``, a passage must contain every one.
+        """
         parts = [f'"{" ".join(words)}"' for words in self.phrases]
         parts += [f'"{term}"' for term in self.terms]
-        return " OR ".join(parts)
+        return (" AND " if require_all else " OR ").join(parts)
+
+    @property
+    def has_several_parts(self) -> bool:
+        return len(self.terms) + len(self.phrases) > 1
 
     @property
     def searched_for(self) -> list[str]:
@@ -150,6 +158,89 @@ def make_excerpt(text_: str, highlights: list[tuple[int, int]], width: int) -> E
 
     shifted = [(s - start, e - start) for s, e in highlights if s >= start and e <= end]
     return Excerpt(text_[start:end], shifted, start > 0, end < len(text_))
+
+
+@dataclass(frozen=True)
+class DocumentMatch:
+    """A passage of one document that contains the query, with highlights over its full text."""
+
+    chunk_id: int
+    ordinal: int
+    page: int | None
+    line_start: int | None
+    line_end: int | None
+    highlights: list[tuple[int, int]]
+
+
+@dataclass(frozen=True)
+class DocumentMatches:
+    query: ParsedQuery
+    matches: list[DocumentMatch]
+    total: int
+    # Every word or phrase is in each match; False when none had them all and any one counted.
+    all_words: bool
+
+
+def find_in_document(
+    session: Session, document_id: str, raw_query: str, *, limit: int
+) -> DocumentMatches:
+    """Passages of one document containing the query, in reading order (not by rank).
+
+    Like a reader's "find", a passage must contain every word; only when none does, passages with
+    any of them are returned instead (and ``all_words`` says so).
+    """
+    query = parse_query(raw_query)
+    result = _find(session, document_id, query, limit=limit, require_all=True)
+    if result.total == 0 and query.has_several_parts:
+        result = _find(session, document_id, query, limit=limit, require_all=False)
+    return result
+
+
+def _find(
+    session: Session, document_id: str, query: ParsedQuery, *, limit: int, require_all: bool
+) -> DocumentMatches:
+    params = {
+        "match": query.match_expression(require_all=require_all),
+        "document_id": document_id,
+        "limit": limit,
+    }
+    rows = session.execute(
+        text(
+            """
+            SELECT c.id, c.ordinal, c.page, c.line_start, c.line_end,
+                   highlight(chunks_fts, 0, char(1), char(2)) AS marked
+            FROM chunks_fts
+            JOIN chunks c ON c.id = chunks_fts.rowid
+            WHERE chunks_fts MATCH :match AND c.document_id = :document_id
+            ORDER BY c.ordinal
+            LIMIT :limit
+            """
+        ),
+        params,
+    )
+    matches = [
+        DocumentMatch(
+            chunk_id=row.id,
+            ordinal=row.ordinal,
+            page=row.page,
+            line_start=row.line_start,
+            line_end=row.line_end,
+            highlights=split_highlights(row.marked)[1],
+        )
+        for row in rows
+    ]
+    total = session.execute(
+        text(
+            """
+            SELECT count(*) FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid
+            WHERE chunks_fts MATCH :match AND c.document_id = :document_id
+            """
+        ),
+        params,
+    ).scalar_one()
+    return DocumentMatches(
+        query, matches, total, all_words=require_all or not query.has_several_parts
+    )
 
 
 def _scope_clause(document_ids: list[str] | None) -> str:

@@ -462,8 +462,9 @@ logged.
 | GET | `/api/documents?q=&status=` | List / filter library by name (case-insensitive, wildcards literal) and status | 200, 422 |
 | POST | `/api/documents` | Upload one file (multipart field `file`) | 202, 409, 413, 415, 422 |
 | GET | `/api/documents/{id}` | Document detail and status | 200, 404 |
-| GET | `/api/documents/{id}/chunks?offset=&limit=` | Extracted text, in chunks, for the reader (limit ≤ 200) | 200, 404, 422 |
-| GET | `/api/documents/{id}/file` | Download original (`Content-Disposition: attachment`, `nosniff`) | 200, 404 |
+| GET | `/api/documents/{id}/chunks?offset=&limit=` | Extracted text, in chunks, for the reader (limit ≤ 200); `page=N` instead of `offset` starts at a PDF page (or the next page with text) | 200, 404, 422 |
+| GET | `/api/documents/{id}/matches?q=` | "Find in document": every passage containing all the words (or, if none has them all, any of them — `all_words` says which), in reading order, with highlight offsets over the full passage; at most 500 listed, `total` counts all | 200, 404, 422 |
+| GET | `/api/documents/{id}/file` | Download original (`Content-Disposition: attachment`, `nosniff`); also fetched by the reader to draw original PDF pages (§14) | 200, 404 |
 | DELETE | `/api/documents/{id}` | Delete record, chunks, index rows and stored file | 204, 404 |
 | GET | `/api/search?q=&document_id=&limit=` | Keyword search over indexed chunks (`limit` ≤ 50, `document_id` repeatable) | 200, 422 |
 | GET | `/api/chunks/{id}` | One passage with document name and location (opens citations) | 200, 404 |
@@ -556,7 +557,8 @@ src/app/
 ├─ core/       api.service (typed HTTP), api.models, api-error (error envelope → message),
 │              connection.service (+ interceptor), config.service, library.store,
 │              upload-queue.service, ask-session.service, toast.service, format
-├─ shared/     icon, status-badge, excerpt, passage-card, confirm-dialog
+│              pdf-page-renderer.service (pdf.js, loaded on demand)
+├─ shared/     icon, status-badge, excerpt, marked-text, passage-card, confirm-dialog
 ├─ features/   library/ (page, upload panel), reader/, search/, ask/, not-found
 └─ app.*       shell: top bar, navigation, outage banner, toasts, routes
 ```
@@ -567,8 +569,31 @@ src/app/
   `HttpClient` events, and after acceptance takes each file's state from the store.
   `AskSessionService` keeps the question thread in memory for the tab only.
 - **Routes** carry state that should survive reload or sharing: `/search?q=&doc=`,
-  `/documents/:id?chunk=` (opens and focuses the passage). Route and query parameters are bound to
+  `/documents/:id?chunk=&q=` (opens and focuses the passage; `q`, added by links from Search and
+  Ask, is searched for again inside the document). Route and query parameters are bound to
   component inputs.
+- **Reader navigation.** The reader holds one window of up to 60 passages and replaces it to show
+  any other position: a citation, a page (`chunks?page=`), or a "find" match outside the window
+  (with five passages of context before it). "Show earlier/more text" extends the window.
+- **Original PDF pages** are drawn by pdf.js (pdfjs-dist 6.4.299, Apache-2.0) into a canvas.
+  The library (≈ 110 kB compressed) is imported only when a page is first shown; its worker, the 14
+  standard fonts, CMaps, ICC profiles and image-decoder modules are copied into `/pdfjs/` at build
+  time, so nothing is fetched from another site and the content security policy is unchanged
+  (the worker is a same-origin script). The PDF comes from the existing download endpoint and is
+  parsed in pdf.js's worker. pdf.js 6 never evaluates code from a PDF (no `eval`/`Function`), and
+  document JavaScript, forms and XFA run only in pdf.js's full viewer, which is not used; XFA is
+  also disabled explicitly; the JavaScript engine pdf.js ships for that viewer is not copied.
+  WebAssembly image decoders are not allowed by the CSP (`'wasm-unsafe-eval'` is not granted), so
+  pdf.js uses its JavaScript fallbacks for JPEG 2000 and JBIG2 images.
+  **Outlining the passage:** pdf.js's text runs for the page are compared with the stored passage
+  as letters and digits only (so hyphenation, ligatures and the layout clean-up of §6 do not
+  matter); a run of 12+ characters found in the passage is outlined, and shorter runs only next to
+  one, so that "the" or a page number is not outlined on its own (`itemsInPassage`, tested).
+  Pages are drawn when the panel is open and the page changes; pdf.js pauses drawing while the tab
+  is hidden.
+- **Serving `.mjs`:** the app server sets `text/javascript` for `.js`/`.mjs` itself — Windows maps
+  `.mjs` to `text/plain`, and with `nosniff` browsers refuse such a worker (found when the original
+  page stayed blank; the end-to-end test fails without the fix).
 - **Errors:** every API error is reduced to `{status, code, message}` using the server's envelope.
   Rule used to detect an unreachable server: the API answers every request — even an unhandled
   failure — with its JSON envelope, so status 0 or a 5xx *without* the envelope means the request

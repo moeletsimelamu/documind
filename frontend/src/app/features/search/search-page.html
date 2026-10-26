@@ -82,7 +82,7 @@
       } @else {
         <ol class="hits">
           @for (hit of result.results; track hit.chunk_id) {
-            <li><dm-passage-card [hit]="hit" /></li>
+            <li><dm-passage-card [hit]="hit" [query]="result.query" /></li>
           }
         </ol>
         @if (result.total_passages > result.results.length) {

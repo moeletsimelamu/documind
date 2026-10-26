@@ -47,6 +47,7 @@ accessibility audit with axe-core; manual keyboard and reflow checks in the brow
 | Headers | `nosniff`, `no-referrer`, `DENY` framing, COOP, Permissions-Policy; CSP `default-src 'none'` for the API and `'self'` for the app; `no-store` on API responses | middleware and SPA tests; Phase 7 browser check (no violations) |
 | Deletion | Record, chunks, index entries (FTS5 integrity-check) and file removed; orphans swept at start-up | `test_db.py`, `test_documents_api.py`, Phase 3 live check |
 | AI answers | Untrusted passages escaped and delimited; citations validated against retrieval; uncited or invalid-only answers withheld; source details from the database | `test_prompt.py`, `test_answering.py` (incl. a document whose injected instructions a fake model obeys); mutation-checked |
+| PDF pages in the browser (added after Phase 10) | Uploaded PDFs are drawn by pdf.js 6.4.299 in its worker: no code evaluation from PDFs, no document scripts, forms or XFA, all assets same-origin, CSP unchanged (no `'wasm-unsafe-eval'`); the PDF is fetched from the attachment-only endpoint, never rendered inline by the browser | Source of the pdf.js worker searched for `eval`/`new Function` (none); end-to-end test renders a PDF with the console-error guard (CSP violations fail it) and the axe audit |
 
 ## 3. Accessibility
 
@@ -83,6 +84,14 @@ accessibility audit with axe-core; manual keyboard and reflow checks in the brow
   fragments of parser input.
 - **No memory limit on Windows** (R4).
 - **The library list is not paginated** (checked with 301 documents: fine; thousands untested).
+- **A second PDF parser runs in the browser.** Showing original pages means hostile PDFs are now
+  also parsed by pdf.js (in a web worker, same origin). pdf.js is widely used for untrusted PDFs
+  and has had serious flaws (CVE-2024-4367, code execution through font data, fixed in 4.2.67);
+  it must be kept up to date like the server-side parser. Its page image is decorative: the canvas
+  is labelled as an image of the page, and the text stays readable in the reader.
+- **The passage outline on the original page is approximate**: found by matching words, not by
+  position, so it can miss a passage (nothing is outlined) or, rarely, outline a repeated phrase
+  elsewhere on the same page. The panel says how it was found.
 
 ## 5. Not verified
 

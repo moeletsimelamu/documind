@@ -79,7 +79,7 @@ import { Icon } from './icon';
     <a
       class="open"
       [routerLink]="['/documents', hit().document_id]"
-      [queryParams]="{ chunk: hit().chunk_id }"
+      [queryParams]="linkParams()"
       [attr.aria-label]="
         'Open ' + hit().document_name + (where() ? ', ' + where() : '') + ' at this passage'
       "
@@ -94,6 +94,12 @@ export class PassageCard {
   readonly label = input<string | null>(null);
   /** The answer that cites this passage, if any; its supporting sentence is highlighted. */
   readonly reference = input<string | null>(null);
+  /** The search or question that found the passage; the reader offers to find it again. */
+  readonly query = input<string | null>(null);
 
   protected readonly where = computed(() => locationLabel(this.hit()));
+  protected readonly linkParams = computed(() => {
+    const query = this.query()?.trim();
+    return query ? { chunk: this.hit().chunk_id, q: query } : { chunk: this.hit().chunk_id };
+  });
 }

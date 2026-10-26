@@ -7,6 +7,7 @@ import {
   ChunkDetail,
   ChunkPage,
   ClientConfig,
+  DocumentMatches,
   DocumentSummary,
   SearchResponse,
 } from './api.models';
@@ -49,6 +50,19 @@ export class ApiService {
   getChunks(id: string, offset: number, limit: number): Observable<ChunkPage> {
     const params = new HttpParams().set('offset', offset).set('limit', limit);
     return this.http.get<ChunkPage>(`/api/documents/${encodeURIComponent(id)}/chunks`, { params });
+  }
+
+  /** Passages from the start of a PDF page (or the next page with text). */
+  getChunksFromPage(id: string, page: number, limit: number): Observable<ChunkPage> {
+    const params = new HttpParams().set('page', page).set('limit', limit);
+    return this.http.get<ChunkPage>(`/api/documents/${encodeURIComponent(id)}/chunks`, { params });
+  }
+
+  findInDocument(id: string, query: string): Observable<DocumentMatches> {
+    const params = new HttpParams().set('q', query);
+    return this.http.get<DocumentMatches>(`/api/documents/${encodeURIComponent(id)}/matches`, {
+      params,
+    });
   }
 
   getChunk(chunkId: number): Observable<ChunkDetail> {

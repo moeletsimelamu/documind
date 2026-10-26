@@ -121,6 +121,9 @@ commands are executed as written.
 | D43 | Ask as a two-column workspace (thread + one sources panel), built as DESIGN.md §6 specified | Owner's request after comparing with similar products; the Phase 5 build had stacked sources per answer. Breakpoint by `matchMedia`, so each layout renders only its own source list. |
 | D44 | Highlight the best-matching sentence, underline matched words | Highlighting every matched word turned whole passages yellow; one sentence shows where to read. Heuristic in the browser from the server's highlight offsets, no API change. |
 | D45 | For cited sources, highlight the sentence the answer draws on | The query's best sentence was not always the one the answer used (real NIST case); word-share overlap with the answer picks it. |
+| D46 | Original PDF pages drawn with pdf.js in the browser, not the browser's own PDF viewer | An inline `<iframe>` would mean serving untrusted uploads inline from the app's origin and loosening the CSP; pdf.js keeps the attachment-only endpoint, draws into a canvas we control, and allows outlining the passage. Lazy-loaded; assets same-origin. |
+| D47 | "Find in document" requires every word, falling back to any | On a 129-page standard, "syncable authenticator" matched 287 passages with any-word matching (every "authenticator"); all words gave 25. Search keeps any-word matching with ranking. |
+| D48 | Reader moves by replacing its window of passages | Jumping to page 100 or a far match loads 60 passages around it instead of everything before it; "Show earlier/more" still extends the window. |
 
 ## Open items
 

@@ -306,6 +306,7 @@
           [hit]="hit"
           [label]="marker"
           [reference]="response.mode === 'generated' && !uncited ? response.answer : null"
+          [query]="entry.question"
         />
         @if (uncited) {
           <p class="subtle not-cited">Retrieved but not cited in the answer.</p>

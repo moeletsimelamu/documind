@@ -130,9 +130,22 @@ Weights: 400, 600 (headings, labels). No weights above 600.
   (confirmation dialog naming the file and what will be removed).
 - Note above the text: "Extracted text — layout, images and tables from the original are not shown."
 - Desktop: a narrow page index on the left ("p. 1 … p. 42") for jumping; the text in serif on a
-  white page, with small-caps "PAGE 3" dividers.
+  white page, with small-caps "PAGE 3" dividers. *(As built after Phase 10: a toolbar instead of the
+  index — see below.)*
 - **Opened from a citation or result** (`?chunk=123`): that passage is scrolled into view, given the
   highlighter background and amber rule, and receives focus so screen readers announce it.
+- **Toolbar (after Phase 10)**, pinned while reading on wider screens, scrolling away on phones:
+  "Page [ ] of 129 · Go" (PDFs), "Find in this document" with "3 of 25", previous/next match and
+  clear, and an **Original page** toggle (PDFs). Found words are marked in the text; the match or
+  page moved to gets a grey rule, the passage opened from a link keeps its highlighter. Opened from
+  Search or Ask, the find box already holds those words. Find wants every word; when no passage has
+  them all it says "(any of the words)".
+- **Original page (after Phase 10):** beside the text on wide screens (sticky, scrolling on its
+  own), above it on narrower ones (and scrolled into view when opened). The page as printed, with
+  the passage being read outlined in translucent highlighter and an amber underline; "Original ·
+  page 25 of 129", previous/next page, close; "View original" beside every page divider. It
+  follows find and page jumps. Caption: "Outlined: where the passage you are reading appears on
+  this page, found by its words."
 
 ### Search
 

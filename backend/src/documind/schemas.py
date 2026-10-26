@@ -85,6 +85,28 @@ class ChunkPage(BaseModel):
     items: list[ChunkOut]
 
 
+class DocumentMatchOut(BaseModel):
+    chunk_id: int
+    ordinal: int
+    page: int | None
+    line_start: int | None
+    line_end: int | None
+    # [start, end) character offsets into the passage's full text of the words that matched.
+    highlights: list[tuple[int, int]]
+
+
+class DocumentMatchesOut(BaseModel):
+    document_id: str
+    query: str
+    searched_for: list[str]
+    total: int
+    # More passages matched than are listed (``total`` counts them all).
+    truncated: bool
+    # True: every word is in each match. False: no passage had them all, so any one counted.
+    all_words: bool
+    matches: list[DocumentMatchOut]
+
+
 class SearchHit(BaseModel):
     chunk_id: int
     document_id: str
